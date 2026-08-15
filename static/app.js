@@ -419,8 +419,16 @@ document.addEventListener('DOMContentLoaded', () => {
             currentTextDiv.classList.add('interim');
         }
 
-        // Auto-scroll suave para o final
-        captionsWrapper.scrollTo({ top: captionsWrapper.scrollHeight, behavior: 'smooth' });
+        // Auto-scroll automático e garantido para a última mensagem
+        scrollToBottom();
+    }
+
+    function scrollToBottom() {
+        requestAnimationFrame(() => {
+            captionsWrapper.scrollTop = captionsWrapper.scrollHeight;
+            captionsWrapper.scrollTo({ top: captionsWrapper.scrollHeight, behavior: 'smooth' });
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        });
     }
 
     function criarBalaoChat(name, color) {
@@ -472,7 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             captionsContainer.appendChild(bubble);
                         }
                     });
-                    captionsWrapper.scrollTo({ top: captionsWrapper.scrollHeight });
+                    scrollToBottom();
                 }
             })
             .catch(err => console.error("Erro ao carregar histórico:", err));
