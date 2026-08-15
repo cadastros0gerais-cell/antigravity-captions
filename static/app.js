@@ -233,14 +233,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
+        let restartTimeout = null;
         recognition.onend = () => {
             if (isRecording) {
-                // Auto restart contínuo
-                try {
-                    recognition.start();
-                } catch (e) {
-                    console.log("Erro ao reiniciar SpeechRecognition:", e);
-                }
+                clearTimeout(restartTimeout);
+                restartTimeout = setTimeout(() => {
+                    if (isRecording) {
+                        try { recognition.start(); } catch (e) {}
+                    }
+                }, 300);
             }
         };
 
@@ -305,6 +306,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Visualizador de Volume do Microfone (VU Meter)
     async function initAudioVisualizer() {
+        // Em celulares, não abre o getUserMedia secundário para evitar bips/conflitos de som no Android/iOS
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (isMobile) {
+            vuMeterCanvas.style.display = 'none';
+            return;
+        }
+
         try {
             mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -424,16 +432,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function scrollToBottom() {
-        setTimeout(() => {
-            const anchor = document.getElementById('scrollAnchor');
-            if (anchor) {
-                anchor.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            }
-            if (captionsWrapper) {
-                captionsWrapper.scrollTop = captionsWrapper.scrollHeight;
-            }
-            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-        }, 60);
+        if (captionsWrapper) {
+            captionsWrapper.scrollTop = captionsWrapper.scrollHeight;
+        }
+        const anchor = document.getElementById('scrollAnchor');
+        if (anchor) {
+            anchor.scrollIntoView({ behavior: 'auto', block: 'end' });
+        }
+        window.scrollTo(0, document.body.scrollHeight);
     }
 
     function criarBalaoChat(name, color) {
