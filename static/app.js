@@ -425,12 +425,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function scrollToBottom() {
         setTimeout(() => {
+            const anchor = document.getElementById('scrollAnchor');
+            if (anchor) {
+                anchor.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
             if (captionsWrapper) {
                 captionsWrapper.scrollTop = captionsWrapper.scrollHeight;
-                captionsWrapper.scrollTo({ top: captionsWrapper.scrollHeight, behavior: 'smooth' });
             }
             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-        }, 50);
+        }, 60);
     }
 
     function criarBalaoChat(name, color) {
