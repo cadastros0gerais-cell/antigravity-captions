@@ -497,7 +497,15 @@ body {
 }
 
 /* RECEIVER PANEL */
+#receiverView {
+    height: calc(100vh - 120px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
 .receiver-toolbar {
+    flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -547,14 +555,13 @@ body {
 
 .captions-wrapper {
     flex: 1;
-    max-height: calc(100vh - 170px);
-    min-height: 450px;
+    height: 100%;
     display: flex;
     flex-direction: column;
     position: relative;
-    overflow-y: auto;
+    overflow-y: auto !important;
     scroll-behavior: smooth;
-    padding: 10px 4px 50px 4px;
+    padding: 10px 4px 60px 4px;
 }
 
 .waiting-box {

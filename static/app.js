@@ -424,11 +424,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function scrollToBottom() {
-        requestAnimationFrame(() => {
-            captionsWrapper.scrollTop = captionsWrapper.scrollHeight;
-            captionsWrapper.scrollTo({ top: captionsWrapper.scrollHeight, behavior: 'smooth' });
+        setTimeout(() => {
+            if (captionsWrapper) {
+                captionsWrapper.scrollTop = captionsWrapper.scrollHeight;
+                captionsWrapper.scrollTo({ top: captionsWrapper.scrollHeight, behavior: 'smooth' });
+            }
             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-        });
+        }, 50);
     }
 
     function criarBalaoChat(name, color) {
