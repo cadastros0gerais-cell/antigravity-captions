@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antigravity - Transcrição & Legendas ao Vivo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-background">
+        <div class="bg-glow bg-glow-1"></div>
+        <div class="bg-glow bg-glow-2"></div>
+    </div>
+
+    <!-- MAIN NAVBAR -->
+    <header class="navbar">
+        <div class="nav-brand">
+            <span class="logo-icon">⚡</span>
+            <span class="logo-text">Antigravity <small>Captions</small></span>
+        </div>
+        <div class="nav-info">
+            <span id="roomBadge" class="badge badge-room" style="display:none;">Sala: <strong id="currentRoomText">main</strong></span>
+            <span id="statusBadge" class="badge badge-disconnected">Desconectado</span>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <!-- SCREEN 1: SELEÇÃO DE PAPEL -->
+        <section id="roleSelectionView" class="view active">
+            <div class="hero-container">
+                <h1 class="hero-title">Legendas ao Vivo & Transcrição</h1>
+                <p class="hero-subtitle">Conecte sua voz ao navegador e transmita texto em tempo real para qualquer pessoa na rede ou internet.</p>
+                
+                <div class="room-selector-box glass-card">
+                    <label for="roomIdInput">Identificador da Sala / Reunião:</label>
+                    <div class="input-group">
+                        <input type="text" id="roomIdInput" value="main" placeholder="Ex: reuniao-diretoria" />
+                    </div>
+                </div>
+
+                <div class="role-grid">
+                    <!-- CARD TRANSMISSOR -->
+                    <div class="role-card glass-card" id="selectTransmissorBtn">
+                        <div class="role-icon mic-glow">🎙️</div>
+                        <h2>Transmissor</h2>
+                        <p>Fale no seu microfone. Sua fala será transcrita pelo navegador e enviada em tempo real para a sala.</p>
+                        <button class="btn btn-primary">Entrar como Transmissor →</button>
+                    </div>
+
+                    <!-- CARD RECEPTOR -->
+                    <div class="role-card glass-card" id="selectReceptorBtn">
+                        <div class="role-icon screen-glow">📺</div>
+                        <h2>Receptor</h2>
+                        <p>Assista às legendas ao vivo na tela. Aplica correções fonéticas automáticas, modo teleprompter e download do histórico.</p>
+                        <button class="btn btn-secondary">Entrar como Receptor →</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SCREEN 2: PAINEL DO TRANSMISSOR -->
+        <section id="transmitterView" class="view">
+            <div class="panel-container glass-card">
+                <div class="panel-header">
+                    <button class="btn-back" id="backFromTransmissorBtn">← Voltar</button>
+                    <h2>Painel do Transmissor</h2>
+                    <span class="badge badge-role">Transmissor</span>
+                </div>
+
+                <div class="transmitter-controls">
+                    <div class="form-group">
+                        <label for="transmitterNameInput">Seu Nome / Identificador:</label>
+                        <input type="text" id="transmitterNameInput" placeholder="Ex: Guilherme" />
+                    </div>
+
+                    <div class="mic-action-area">
+                        <button id="toggleMicBtn" class="btn-mic">
+                            <span class="mic-icon">🎙️</span>
+                            <span id="micBtnText">Iniciar Microfone</span>
+                        </button>
+                    </div>
+
+                    <!-- VISUALIZADOR DE ONDA DO MICROFONE -->
+                    <div class="audio-visualizer-box">
+                        <canvas id="vuMeterCanvas" width="300" height="40"></canvas>
+                        <div id="micStatusText" class="mic-status-info">Microfone desligado</div>
+                    </div>
+
+                    <!-- PRÉ-VISUALIZAÇÃO DA FALA -->
+                    <div class="live-preview-box">
+                        <label>Sua fala em tempo real:</label>
+                        <div id="liveTextPreview" class="preview-text">Aguardando início da gravação...</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SCREEN 3: PAINEL DO RECEPTOR -->
+        <section id="receiverView" class="view">
+            <div class="receiver-toolbar glass-card">
+                <div class="toolbar-left">
+                    <button class="btn-back" id="backFromReceptorBtn">← Voltar</button>
+                    <div class="mode-toggles">
+                        <button id="modeChatBtn" class="btn-toggle active">💬 Modo Chat</button>
+                        <button id="modeSubtitleBtn" class="btn-toggle">📺 Modo Legenda</button>
+                    </div>
+                </div>
+                
+                <div class="toolbar-right">
+                    <button id="openDictModalBtn" class="btn btn-outline" title="Adicionar palavras ao dicionário">📖 Dicionário</button>
+                    <button id="exportLogBtn" class="btn btn-outline" title="Baixar histórico da reunião">📥 Baixar Log</button>
+                    <button id="clearCaptionsBtn" class="btn btn-icon-only" title="Limpar tela">🗑️</button>
+                </div>
+            </div>
+
+            <!-- CONTAINER DE MENSAGENS E LEGENDAS -->
+            <div id="captionsWrapper" class="captions-wrapper mode-chat">
+                <div id="connectionWaiting" class="waiting-box">
+                    <div class="spinner"></div>
+                    <p>Conectado à sala <strong id="waitingRoomName">main</strong>. Aguardando falas...</p>
+                </div>
+                <div id="captionsContainer" class="captions-container"></div>
+            </div>
+
+            <!-- MODO LEGENDA GRANDE (PROJETOR/TELEPROMPTER) -->
+            <div id="subtitleOverlay" class="subtitle-overlay" style="display: none;">
+                <div id="subtitleSpeaker" class="subtitle-speaker"></div>
+                <div id="subtitleText" class="subtitle-content">Aguardando legendas...</div>
+            </div>
+        </section>
+    </main>
+
+    <!-- MODAL DE EDIÇÃO DO DICIONÁRIO FONÉTICO -->
+    <div id="dictModal" class="modal-overlay" style="display: none;">
+        <div class="modal-card glass-card">
+            <div class="modal-header">
+                <h3>📖 Dicionário de Termos & Correção Fonética</h3>
+                <button id="closeDictModalBtn" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Adicione palavras que o navegador costuma entender errado para substituir automaticamente pela versão correta.</p>
+
+                <div class="dict-add-form">
+                    <input type="text" id="dictPalavraInput" placeholder="Como o navegador ouve (ex: quei frame)" />
+                    <input type="text" id="dictSubstInput" placeholder="Termo correto (ex: keyframe)" />
+                    <button id="addDictTermBtn" class="btn btn-primary">Adicionar</button>
+                </div>
+
+                <div class="dict-list-box">
+                    <h4>Termos cadastrados no servidor:</h4>
+                    <div id="dictTermsList" class="dict-terms-grid">Carregando termos...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
