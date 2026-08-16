@@ -349,6 +349,25 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
+    let nameDebounceTimeout = null;
+    if (transmitterNameInput) {
+        transmitterNameInput.addEventListener('input', () => {
+            const newName = transmitterNameInput.value.trim() || "Anônimo";
+            localStorage.setItem('antigravity_user_name', newName);
+
+            clearTimeout(nameDebounceTimeout);
+            nameDebounceTimeout = setTimeout(() => {
+                if (ws && ws.readyState === WebSocket.OPEN && currentRole) {
+                    ws.send(JSON.stringify({
+                        type: 'join',
+                        name: newName,
+                        role: currentRole
+                    }));
+                }
+            }, 400);
+        });
+    }
+
     toggleMicBtn.addEventListener('click', () => {
         const name = transmitterNameInput.value.trim();
         if (!name) {
@@ -386,6 +405,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function stopRecording() {
         isRecording = false;
+
+        // Se havia algum trecho provisório no preview ao clicar em Parar Microfone, enviar como finalizado imediatamente
+        if (lastSentInterimText && ws && ws.readyState === WebSocket.OPEN) {
+            const userName = transmitterNameInput.value.trim() || "Anônimo";
+            ws.send(JSON.stringify({ name: userName, text: lastSentInterimText, isFinal: true }));
+            lastSentInterimText = '';
+        }
+
         if (recognition) {
             try {
                 recognition.abort();
