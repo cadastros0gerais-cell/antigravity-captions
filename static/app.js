@@ -59,6 +59,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const qrCodeImage = document.getElementById('qrCodeImage');
     const copyQrLinkBtn = document.getElementById('copyQrLinkBtn');
     const toastNotification = document.getElementById('toastNotification');
+
+    // Modal de Participantes
+    const openUsersModalBtn = document.getElementById('openUsersModalBtn');
+    const usersCountBadge = document.getElementById('usersCountBadge');
+    const usersModal = document.getElementById('usersModal');
+    const closeUsersModalBtn = document.getElementById('closeUsersModalBtn');
+    const usersListContainer = document.getElementById('usersListContainer');
+    let connectedUsersList = [];
     let currentRole = null; // 'transmissor' | 'receptor'
     let currentRoom = 'main';
     let ws = null;
@@ -126,6 +134,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ws.onopen = () => {
             setStatus("Conectado ao vivo", "connected");
+            openUsersModalBtn.style.display = 'inline-flex';
+            
+            const myName = (currentRole === 'transmissor') 
+                ? (transmitterNameInput.value.trim() || 'Transmissor') 
+                : (localStorage.getItem('antigravity_user_name') || 'Leitor');
+
+            ws.send(JSON.stringify({
+                type: 'join',
+                name: myName,
+                role: currentRole
+            }));
+
             if (currentRole === 'receptor') {
                 carregarHistoricoSala(room);
             }
@@ -133,6 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ws.onclose = () => {
             setStatus("Desconectado", "disconnected");
+            openUsersModalBtn.style.display = 'none';
         };
 
         ws.onerror = (err) => {
@@ -143,6 +164,37 @@ document.addEventListener('DOMContentLoaded', () => {
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+
+                // Atualização de Lista de Participantes
+                if (data.type === 'user_list_update') {
+                    connectedUsersList = data.users || [];
+                    usersCountBadge.innerText = connectedUsersList.length;
+                    renderizarListaParticipantes();
+                    return;
+                }
+
+                // Notificação de Entrada
+                if (data.type === 'user_joined') {
+                    showToast(`👋 ${data.name} (${data.role}) entrou na sala`);
+                    return;
+                }
+
+                // Notificação de Saída
+                if (data.type === 'user_left') {
+                    showToast(`🚪 ${data.name} saiu da sala`);
+                    return;
+                }
+
+                // Expulsão (Kick)
+                if (data.type === 'kicked') {
+                    alert(data.message || "Você foi desconectado da sala pelo transmissor.");
+                    if (currentRole === 'transmissor') stopRecording();
+                    currentRole = null;
+                    if (ws) ws.close();
+                    roomBadge.style.display = 'none';
+                    switchView('roleSelection');
+                    return;
+                }
 
                 // Estatísticas do servidor
                 if (data.type === 'room_stats') {
@@ -705,4 +757,75 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     handleUrlParams();
+
+    // --- RENDERIZAÇÃO E EVENTOS DO MODAL DE PARTICIPANTES ---
+    function renderizarListaParticipantes() {
+        if (!usersListContainer) return;
+        usersListContainer.innerHTML = '';
+
+        if (connectedUsersList.length === 0) {
+            usersListContainer.innerHTML = '<p class="text-muted">Nenhum participante conectado.</p>';
+            return;
+        }
+
+        connectedUsersList.forEach(user => {
+            const card = document.createElement('div');
+            card.className = 'user-card-item';
+
+            const roleIcon = user.role === 'transmissor' ? '🎙️' : '📺';
+
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'user-card-info';
+            infoDiv.innerHTML = `
+                <span>${roleIcon}</span>
+                <span class="user-card-name">${escapeHtml(user.name)}</span>
+                <span class="user-role-tag ${user.role}">${user.role}</span>
+            `;
+
+            card.appendChild(infoDiv);
+
+            // Transmissor pode remover receptores
+            if (currentRole === 'transmissor' && user.role === 'receptor') {
+                const kickBtn = document.createElement('button');
+                kickBtn.className = 'btn-kick';
+                kickBtn.innerText = '❌ Remover';
+                kickBtn.addEventListener('click', () => {
+                    if (confirm(`Deseja desconectar "${user.name}" da sala?`)) {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({ type: 'kick', targetId: user.id }));
+                        }
+                    }
+                });
+                card.appendChild(kickBtn);
+            }
+
+            usersListContainer.appendChild(card);
+        });
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    if (openUsersModalBtn) {
+        openUsersModalBtn.addEventListener('click', () => {
+            renderizarListaParticipantes();
+            usersModal.style.display = 'flex';
+        });
+    }
+
+    if (closeUsersModalBtn) {
+        closeUsersModalBtn.addEventListener('click', () => {
+            usersModal.style.display = 'none';
+        });
+    }
+
+    if (usersModal) {
+        usersModal.addEventListener('click', (e) => {
+            if (e.target === usersModal) {
+                usersModal.style.display = 'none';
+            }
+        });
+    }
 });

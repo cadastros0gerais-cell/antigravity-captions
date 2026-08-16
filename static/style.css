@@ -829,3 +829,71 @@ body {
     85% { opacity: 1; transform: translate(-50%, 0); }
     100% { opacity: 0; transform: translate(-50%, -10px); }
 }
+
+/* LISTA DE PARTICIPANTES DA SALA */
+.users-list-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.user-card-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--bg-card-border);
+    border-radius: var(--radius-md);
+}
+
+.user-card-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.user-card-name {
+    font-weight: 600;
+    color: var(--text-main);
+    font-size: 14px;
+}
+
+.user-role-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.user-role-tag.transmissor {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.user-role-tag.receptor {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.btn-kick {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-kick:hover {
+    background: #ef4444;
+    color: #ffffff;
+}

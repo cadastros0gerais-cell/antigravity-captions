@@ -5,3 +5,4 @@ __pycache__/
 logs/*
 !logs/.gitkeep
 backup_original/
+backup_v2_salasprivadas/

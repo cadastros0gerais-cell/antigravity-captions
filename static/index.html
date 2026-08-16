@@ -22,6 +22,7 @@
             <span class="logo-text">Antigravity <small>Captions</small></span>
         </div>
         <div class="nav-info">
+            <button id="openUsersModalBtn" class="btn btn-outline" style="display:none; padding: 4px 12px; font-size: 13px;" title="Ver lista de participantes">👥 <span id="usersCountBadge">0</span></button>
             <span id="roomBadge" class="badge badge-room" style="display:none;">Sala: <strong id="currentRoomText">main</strong></span>
             <span id="statusBadge" class="badge badge-disconnected">Desconectado</span>
         </div>
@@ -180,6 +181,20 @@
                 <div style="margin-top: 15px;">
                     <button id="copyQrLinkBtn" class="btn btn-primary" style="width: 100%;">🔗 Copiar Link Direto</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE LISTA DE PARTICIPANTES -->
+    <div id="usersModal" class="modal-overlay" style="display: none;">
+        <div class="modal-card glass-card" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3>👥 Participantes Conectados</h3>
+                <button id="closeUsersModalBtn" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted" style="margin-bottom: 15px;">Pessoas presentes nesta sala em tempo real:</p>
+                <div id="usersListContainer" class="users-list-grid">Carregando lista...</div>
             </div>
         </div>
     </div>

@@ -32,55 +32,141 @@ if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # Connection Manager com suporte a múltiplas Salas (Rooms)
+import uuid
+
+# Connection Manager com suporte a presença e controle de participantes
 class RoomConnectionManager:
     def __init__(self):
-        # room_id -> list of WebSockets
-        self.rooms: Dict[str, List[WebSocket]] = {}
+        # room_id -> dict of client_id: { 'ws': WebSocket, 'id': str, 'name': str, 'role': str }
+        self.clients: Dict[str, Dict[str, dict]] = {}
         # room_id -> list of transcript history entries
         self.history: Dict[str, List[dict]] = {}
 
-    async def connect(self, websocket: WebSocket, room_id: str = "main"):
+    async def connect(self, websocket: WebSocket, room_id: str = "main") -> str:
         await websocket.accept()
-        if room_id not in self.rooms:
-            self.rooms[room_id] = []
-            self.history[room_id] = []
-        self.rooms[room_id].append(websocket)
+        client_id = uuid.uuid4().hex[:8]
         
-        # Enviar estatísticas da sala para quem acabou de conectar
-        stats = {
-            "type": "room_stats",
-            "connectionsCount": len(self.rooms[room_id]),
-            "roomId": room_id
+        if room_id not in self.clients:
+            self.clients[room_id] = {}
+            self.history[room_id] = []
+            
+        self.clients[room_id][client_id] = {
+            "ws": websocket,
+            "id": client_id,
+            "name": "Anônimo",
+            "role": "receptor"
         }
-        await websocket.send_text(json.dumps(stats))
+        
+        return client_id
 
-    def disconnect(self, websocket: WebSocket, room_id: str = "main"):
-        if room_id in self.rooms and websocket in self.rooms[room_id]:
-            self.rooms[room_id].remove(websocket)
-            if len(self.rooms[room_id]) == 0:
-                del self.rooms[room_id]
+    async def update_user(self, room_id: str, client_id: str, name: str, role: str):
+        if room_id in self.clients and client_id in self.clients[room_id]:
+            old_name = self.clients[room_id][client_id]["name"]
+            self.clients[room_id][client_id]["name"] = name
+            self.clients[room_id][client_id]["role"] = role
+            
+            # Notificar entrada se for novo nome
+            await self.broadcast_presence_event(room_id, "user_joined", {
+                "name": name,
+                "role": role,
+                "clientId": client_id
+            })
+            await self.broadcast_user_list(room_id)
+
+    def disconnect(self, websocket: WebSocket, room_id: str = "main") -> Optional[dict]:
+        removed_user = None
+        if room_id in self.clients:
+            for cid, info in list(self.clients[room_id].items()):
+                if info["ws"] == websocket:
+                    removed_user = info
+                    del self.clients[room_id][cid]
+                    break
+                    
+            if len(self.clients[room_id]) == 0:
+                del self.clients[room_id]
                 if room_id in self.history:
                     del self.history[room_id]
+                    
+        return removed_user
 
-    async def broadcast(self, message: str, room_id: str = "main"):
-        if room_id not in self.rooms:
+    def get_users_list(self, room_id: str) -> List[dict]:
+        if room_id not in self.clients:
+            return []
+        return [
+            {
+                "id": cid,
+                "name": info["name"],
+                "role": info["role"]
+            }
+            for cid, info in self.clients[room_id].items()
+        ]
+
+    async def broadcast_user_list(self, room_id: str):
+        users = self.get_users_list(room_id)
+        msg = json.dumps({
+            "type": "user_list_update",
+            "users": users,
+            "connectionsCount": len(users),
+            "roomId": room_id
+        })
+        await self.broadcast(msg, room_id)
+
+    async def broadcast_presence_event(self, room_id: str, event_type: str, payload: dict):
+        msg = json.dumps({
+            "type": event_type,
+            **payload
+        })
+        await self.broadcast(msg, room_id)
+
+    async def kick_user(self, room_id: str, target_client_id: str, kicker_client_id: str):
+        if room_id not in self.clients or kicker_client_id not in self.clients[room_id]:
             return
         
-        dead_connections = []
-        for connection in list(self.rooms[room_id]):
+        # Apenas transmissores podem expulsar
+        kicker = self.clients[room_id][kicker_client_id]
+        if kicker["role"] != "transmissor":
+            return
+
+        if target_client_id in self.clients[room_id]:
+            target = self.clients[room_id][target_client_id]
+            target_ws = target["ws"]
+            target_name = target["name"]
+            
+            # Enviar aviso de expulsão para o alvo
             try:
-                await connection.send_text(message)
+                await target_ws.send_text(json.dumps({
+                    "type": "kicked",
+                    "message": "Você foi desconectado da sala pelo transmissor."
+                }))
+                await target_ws.close()
             except Exception:
-                dead_connections.append(connection)
+                pass
+
+            del self.clients[room_id][target_client_id]
+            await self.broadcast_presence_event(room_id, "user_left", {
+                "name": target_name,
+                "reason": "kicked"
+            })
+            await self.broadcast_user_list(room_id)
+
+    async def broadcast(self, message: str, room_id: str = "main"):
+        if room_id not in self.clients:
+            return
         
-        for dead in dead_connections:
-            self.disconnect(dead, room_id)
+        dead_clients = []
+        for cid, info in list(self.clients[room_id].items()):
+            try:
+                await info["ws"].send_text(message)
+            except Exception:
+                dead_clients.append(info["ws"])
+        
+        for dead_ws in dead_clients:
+            self.disconnect(dead_ws, room_id)
 
     def add_to_history(self, room_id: str, entry: dict):
         if room_id not in self.history:
             self.history[room_id] = []
         self.history[room_id].append(entry)
-        # Limita histórico recente em memória para 200 frases por sala
         if len(self.history[room_id]) > 200:
             self.history[room_id] = self.history[room_id][-200:]
 
@@ -106,12 +192,12 @@ async def serve_dicionario():
 
 @app.get("/api/status")
 async def get_status():
-    total_connections = sum(len(conns) for conns in manager.rooms.values())
+    total_connections = sum(len(clients) for clients in manager.clients.values())
     return {
         "status": "online",
         "app": "Antigravity Live Captions",
         "totalConnections": total_connections,
-        "activeRoomsCount": len(manager.rooms)
+        "activeRoomsCount": len(manager.clients)
     }
 
 @app.get("/api/dicionario")
@@ -192,7 +278,7 @@ async def clear_room_log(room_id: str):
 @app.websocket("/ws")
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: Optional[str] = "main"):
-    await manager.connect(websocket, room_id)
+    client_id = await manager.connect(websocket, room_id)
     try:
         while True:
             data_str = await websocket.receive_text()
@@ -203,6 +289,19 @@ async def websocket_endpoint(websocket: WebSocket, room_id: Optional[str] = "mai
 
             # Injetar room_id se não especificado
             data["room"] = room_id
+            msg_type = data.get("type")
+
+            if msg_type == "join":
+                name = data.get("name", "Anônimo").strip() or "Anônimo"
+                role = data.get("role", "receptor")
+                await manager.update_user(room_id, client_id, name, role)
+                continue
+
+            if msg_type == "kick":
+                target_id = data.get("targetId")
+                if target_id:
+                    await manager.kick_user(room_id, target_id, client_id)
+                continue
 
             # Se for uma frase finalizada, gravar no arquivo da sala
             if "name" in data and "text" in data and data.get("isFinal"):
@@ -224,7 +323,13 @@ async def websocket_endpoint(websocket: WebSocket, room_id: Optional[str] = "mai
             await manager.broadcast(json.dumps(data), room_id)
 
     except WebSocketDisconnect:
-        manager.disconnect(websocket, room_id)
+        user_info = manager.disconnect(websocket, room_id)
+        if user_info:
+            await manager.broadcast_presence_event(room_id, "user_left", {
+                "name": user_info["name"],
+                "reason": "disconnect"
+            })
+            await manager.broadcast_user_list(room_id)
 
 if __name__ == "__main__":
     import uvicorn
