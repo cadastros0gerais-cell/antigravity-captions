@@ -50,14 +50,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Elementos de Compartilhamento & Sala Privada
     const generateRandomRoomBtn = document.getElementById('generateRandomRoomBtn');
-    const shareTransmitterLinkBtn = document.getElementById('shareTransmitterLinkBtn');
-    const qrTransmitterBtn = document.getElementById('qrTransmitterBtn');
-    const shareReceiverLinkBtn = document.getElementById('shareReceiverLinkBtn');
-    const qrReceiverBtn = document.getElementById('qrReceiverBtn');
-    const qrModal = document.getElementById('qrModal');
-    const closeQrModalBtn = document.getElementById('closeQrModalBtn');
-    const qrCodeImage = document.getElementById('qrCodeImage');
-    const copyQrLinkBtn = document.getElementById('copyQrLinkBtn');
+    const shareRoomBtnTransmitter = document.getElementById('shareRoomBtnTransmitter');
+    const shareRoomBtnReceiver = document.getElementById('shareRoomBtnReceiver');
+    const shareModal = document.getElementById('shareModal');
+    const closeShareModalBtn = document.getElementById('closeShareModalBtn');
+    const shareLinkInput = document.getElementById('shareLinkInput');
+    const copyShareLinkBtn = document.getElementById('copyShareLinkBtn');
+    const shareQrCodeImage = document.getElementById('shareQrCodeImage');
     const toastNotification = document.getElementById('toastNotification');
 
     // Modal de Participantes
@@ -692,67 +691,54 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.removeChild(textArea);
     }
 
-    // Handlers dos Botões de Copiar Link
-    if (shareTransmitterLinkBtn) {
-        shareTransmitterLinkBtn.addEventListener('click', () => {
-            copyToClipboard(getShareableLink('receptor'), '🔗 Link para Receptores copiado!');
+    // --- MODAL UNIFICADO DE COMPARTILHAMENTO ---
+    function getNeutralShareableLink() {
+        const room = currentRoom || roomIdInput.value.trim() || 'main';
+        const url = new URL(window.location.origin + window.location.pathname);
+        url.searchParams.set('room', room);
+        return url.toString();
+    }
+
+    function openShareModal() {
+        const link = getNeutralShareableLink();
+        if (shareLinkInput) shareLinkInput.value = link;
+        if (shareQrCodeImage) {
+            shareQrCodeImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}`;
+        }
+        if (shareModal) shareModal.style.display = 'flex';
+    }
+
+    if (shareRoomBtnTransmitter) shareRoomBtnTransmitter.addEventListener('click', openShareModal);
+    if (shareRoomBtnReceiver) shareRoomBtnReceiver.addEventListener('click', openShareModal);
+
+    if (closeShareModalBtn) {
+        closeShareModalBtn.addEventListener('click', () => {
+            if (shareModal) shareModal.style.display = 'none';
         });
     }
 
-    if (shareReceiverLinkBtn) {
-        shareReceiverLinkBtn.addEventListener('click', () => {
-            copyToClipboard(getShareableLink('receptor'), '🔗 Link da Sala copiado!');
-        });
-    }
-
-    // Modal de QR Code
-    function openQrModal() {
-        const link = getShareableLink('receptor');
-        qrCodeImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(link)}`;
-        qrModal.style.display = 'flex';
-    }
-
-    if (qrTransmitterBtn) qrTransmitterBtn.addEventListener('click', openQrModal);
-    if (qrReceiverBtn) qrReceiverBtn.addEventListener('click', openQrModal);
-
-    if (closeQrModalBtn) {
-        closeQrModalBtn.addEventListener('click', () => {
-            qrModal.style.display = 'none';
-        });
-    }
-
-    if (qrModal) {
-        qrModal.addEventListener('click', (e) => {
-            if (e.target === qrModal) {
-                qrModal.style.display = 'none';
+    if (shareModal) {
+        shareModal.addEventListener('click', (e) => {
+            if (e.target === shareModal) {
+                shareModal.style.display = 'none';
             }
         });
     }
 
-    if (copyQrLinkBtn) {
-        copyQrLinkBtn.addEventListener('click', () => {
-            copyToClipboard(getShareableLink('receptor'), '🔗 Link direto copiado!');
+    if (copyShareLinkBtn) {
+        copyShareLinkBtn.addEventListener('click', () => {
+            const link = shareLinkInput ? shareLinkInput.value : getNeutralShareableLink();
+            copyToClipboard(link, '🔗 Link da Sala copiado!');
         });
     }
 
-    // AUTO-CONEXÃO VIA PARÂMETROS DE URL (?room=XYZ&role=receptor)
+    // LEITURA NEUTRA DE PARÂMETROS DA URL (?room=XYZ)
     function handleUrlParams() {
         const params = new URLSearchParams(window.location.search);
         const roomParam = params.get('room');
-        const roleParam = params.get('role');
 
         if (roomParam) {
             roomIdInput.value = roomParam.trim();
-        }
-
-        if (roleParam === 'receptor') {
-            setTimeout(() => {
-                selectReceptorBtn.click();
-            }, 100);
-        } else if (roleParam === 'transmissor') {
-            setTimeout(() => {
-                selectTransmissorBtn.click();
-            }, 100);
         }
     }
 
@@ -768,24 +754,34 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const myName = (currentRole === 'transmissor') 
+            ? (transmitterNameInput.value.trim() || 'Transmissor') 
+            : (localStorage.getItem('antigravity_user_name') || 'Leitor');
+
+        // Verificar se o usuário atual é o Gerente da Sala
+        const meInList = connectedUsersList.find(u => u.name === myName && u.role === currentRole);
+        const amIManager = meInList ? meInList.isManager : false;
+
         connectedUsersList.forEach(user => {
             const card = document.createElement('div');
             card.className = 'user-card-item';
 
             const roleIcon = user.role === 'transmissor' ? '🎙️' : '📺';
+            const managerBadge = user.isManager ? '<span class="user-manager-tag">👑 Gerente</span>' : '';
 
             const infoDiv = document.createElement('div');
             infoDiv.className = 'user-card-info';
             infoDiv.innerHTML = `
                 <span>${roleIcon}</span>
                 <span class="user-card-name">${escapeHtml(user.name)}</span>
+                ${managerBadge}
                 <span class="user-role-tag ${user.role}">${user.role}</span>
             `;
 
             card.appendChild(infoDiv);
 
-            // Transmissor pode remover receptores
-            if (currentRole === 'transmissor' && user.role === 'receptor') {
+            // Apenas o Gerente da Sala pode remover qualquer outro participante da reunião
+            if (amIManager && !user.isManager) {
                 const kickBtn = document.createElement('button');
                 kickBtn.className = 'btn-kick';
                 kickBtn.innerText = '❌ Remover';
