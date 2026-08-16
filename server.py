@@ -34,13 +34,11 @@ if STATIC_DIR.exists():
 # Connection Manager com suporte a múltiplas Salas (Rooms)
 import uuid
 
-# Connection Manager com suporte a presença, gerente de sala e controle de participantes
+# Connection Manager com suporte a presença em tempo real e remoção livre de participantes
 class RoomConnectionManager:
     def __init__(self):
         # room_id -> dict of client_id: { 'ws': WebSocket, 'id': str, 'name': str, 'role': str }
         self.clients: Dict[str, Dict[str, dict]] = {}
-        # room_id -> client_id of manager (Gerente)
-        self.managers: Dict[str, str] = {}
         # room_id -> list of transcript history entries
         self.history: Dict[str, List[dict]] = {}
 
@@ -59,9 +57,12 @@ class RoomConnectionManager:
             "role": "receptor"
         }
 
-        # O primeiro a entrar na sala torna-se o Gerente da Sala automaticamente
-        if room_id not in self.managers or self.managers[room_id] not in self.clients[room_id]:
-            self.managers[room_id] = client_id
+        # Enviar o ID da conexão ao cliente que acabou de conectar
+        await websocket.send_text(json.dumps({
+            "type": "welcome",
+            "clientId": client_id,
+            "roomId": room_id
+        }))
         
         return client_id
 
@@ -70,13 +71,10 @@ class RoomConnectionManager:
             self.clients[room_id][client_id]["name"] = name
             self.clients[room_id][client_id]["role"] = role
             
-            is_manager = (self.managers.get(room_id) == client_id)
-            
             await self.broadcast_presence_event(room_id, "user_joined", {
                 "name": name,
                 "role": role,
-                "clientId": client_id,
-                "isManager": is_manager
+                "clientId": client_id
             })
             await self.broadcast_user_list(room_id)
 
@@ -88,22 +86,11 @@ class RoomConnectionManager:
                     removed_user = info
                     del self.clients[room_id][cid]
                     break
-            
-            # Se o Gerente saiu, repassar a liderança para o próximo participante presente
-            if removed_user and self.managers.get(room_id) == removed_user["id"]:
-                if len(self.clients[room_id]) > 0:
-                    next_manager_id = next(iter(self.clients[room_id].keys()))
-                    self.managers[room_id] = next_manager_id
-                else:
-                    if room_id in self.managers:
-                        del self.managers[room_id]
 
             if len(self.clients[room_id]) == 0:
                 del self.clients[room_id]
                 if room_id in self.history:
                     del self.history[room_id]
-                if room_id in self.managers:
-                    del self.managers[room_id]
                     
         return removed_user
 
@@ -111,13 +98,11 @@ class RoomConnectionManager:
         if room_id not in self.clients:
             return []
         
-        manager_id = self.managers.get(room_id)
         return [
             {
                 "id": cid,
                 "name": info["name"],
-                "role": info["role"],
-                "isManager": (cid == manager_id)
+                "role": info["role"]
             }
             for cid, info in self.clients[room_id].items()
         ]
@@ -128,7 +113,6 @@ class RoomConnectionManager:
             "type": "user_list_update",
             "users": users,
             "connectionsCount": len(users),
-            "managerId": self.managers.get(room_id),
             "roomId": room_id
         })
         await self.broadcast(msg, room_id)
@@ -141,12 +125,8 @@ class RoomConnectionManager:
         await self.broadcast(msg, room_id)
 
     async def kick_user(self, room_id: str, target_client_id: str, kicker_client_id: str):
+        # Qualquer participante válido da sala pode solicitar a remoção de outro participante
         if room_id not in self.clients or kicker_client_id not in self.clients[room_id]:
-            return
-        
-        # Apenas o Gerente da Sala pode expulsar participantes (Transmissor ou Receptor)
-        kicker_is_manager = (self.managers.get(room_id) == kicker_client_id)
-        if not kicker_is_manager:
             return
 
         if target_client_id in self.clients[room_id] and target_client_id != kicker_client_id:
@@ -157,7 +137,7 @@ class RoomConnectionManager:
             try:
                 await target_ws.send_text(json.dumps({
                     "type": "kicked",
-                    "message": "Você foi desconectado da sala pelo Gerente da Reunião."
+                    "message": "Você foi desconectado da sala por um participante."
                 }))
                 await target_ws.close()
             except Exception:

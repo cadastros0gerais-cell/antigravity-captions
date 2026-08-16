@@ -66,6 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeUsersModalBtn = document.getElementById('closeUsersModalBtn');
     const usersListContainer = document.getElementById('usersListContainer');
     let connectedUsersList = [];
+    let myClientId = null;
     let currentRole = null; // 'transmissor' | 'receptor'
     let currentRoom = 'main';
     let ws = null;
@@ -163,6 +164,12 @@ document.addEventListener('DOMContentLoaded', () => {
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+
+                // Boas-vindas com ID do cliente
+                if (data.type === 'welcome') {
+                    myClientId = data.clientId;
+                    return;
+                }
 
                 // Atualização de Lista de Participantes
                 if (data.type === 'user_list_update') {
@@ -758,30 +765,25 @@ document.addEventListener('DOMContentLoaded', () => {
             ? (transmitterNameInput.value.trim() || 'Transmissor') 
             : (localStorage.getItem('antigravity_user_name') || 'Leitor');
 
-        // Verificar se o usuário atual é o Gerente da Sala
-        const meInList = connectedUsersList.find(u => u.name === myName && u.role === currentRole);
-        const amIManager = meInList ? meInList.isManager : false;
-
         connectedUsersList.forEach(user => {
             const card = document.createElement('div');
             card.className = 'user-card-item';
 
             const roleIcon = user.role === 'transmissor' ? '🎙️' : '📺';
-            const managerBadge = user.isManager ? '<span class="user-manager-tag">👑 Gerente</span>' : '';
+            const isSelf = (user.id === myClientId) || (user.name === myName && user.role === currentRole);
 
             const infoDiv = document.createElement('div');
             infoDiv.className = 'user-card-info';
             infoDiv.innerHTML = `
                 <span>${roleIcon}</span>
                 <span class="user-card-name">${escapeHtml(user.name)}</span>
-                ${managerBadge}
                 <span class="user-role-tag ${user.role}">${user.role}</span>
             `;
 
             card.appendChild(infoDiv);
 
-            // Apenas o Gerente da Sala pode remover qualquer outro participante da reunião
-            if (amIManager && !user.isManager) {
+            // Qualquer participante pode remover outro participante da reunião
+            if (!isSelf) {
                 const kickBtn = document.createElement('button');
                 kickBtn.className = 'btn-kick';
                 kickBtn.innerText = '❌ Remover';
