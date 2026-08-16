@@ -83,6 +83,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const colorPalette = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#f97316'];
     let colorIndex = 0;
     let activeSpeechDivs = {};
+    let silenceTimers = {};
+    let lastInterimTexts = {};
+    let lastSentInterimText = '';
     let currentViewMode = 'chat'; // 'chat' | 'subtitle'
 
     // Carregar nome salvo no localStorage
@@ -307,12 +310,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (finalTranscript.trim() !== '') {
                 const text = finalTranscript.trim();
                 liveTextPreview.innerText = `"${text}"`;
+                lastSentInterimText = '';
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ name: userName, text: text, isFinal: true }));
                 }
             } else if (interimTranscript.trim() !== '') {
                 const text = interimTranscript.trim();
                 liveTextPreview.innerText = `"${text}..."`;
+                lastSentInterimText = text;
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ name: userName, text: text, isFinal: false }));
                 }
@@ -322,6 +327,13 @@ document.addEventListener('DOMContentLoaded', () => {
         let restartTimeout = null;
         recognition.onend = () => {
             if (isRecording) {
+                // Se havia texto provisório pendente ao pausar, enviar como finalizado para travar o balão
+                if (lastSentInterimText && ws && ws.readyState === WebSocket.OPEN) {
+                    const userName = transmitterNameInput.value.trim() || "Anônimo";
+                    ws.send(JSON.stringify({ name: userName, text: lastSentInterimText, isFinal: true }));
+                    lastSentInterimText = '';
+                }
+
                 clearTimeout(restartTimeout);
                 restartTimeout = setTimeout(() => {
                     if (isRecording) {
@@ -516,6 +528,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return speakerColors[name];
     }
 
+    function finalizeSpeakerBubble(name) {
+        if (silenceTimers[name]) {
+            clearTimeout(silenceTimers[name]);
+            delete silenceTimers[name];
+        }
+        if (activeSpeechDivs[name]) {
+            const currentTextDiv = activeSpeechDivs[name].querySelector('.chat-text');
+            if (currentTextDiv) {
+                currentTextDiv.classList.remove('interim');
+            }
+            activeSpeechDivs[name] = null;
+        }
+        delete lastInterimTexts[name];
+    }
+
     function processarMensagemReceptor(name, text, isFinal) {
         connectionWaiting.style.display = 'none';
         const color = getSpeakerColor(name);
@@ -530,19 +557,44 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Modo Chat
-        if (!activeSpeechDivs[name]) {
-            criarBalaoChat(name, color);
-        }
-
-        const currentTextDiv = activeSpeechDivs[name].querySelector('.chat-text');
-
         if (isFinal) {
+            if (silenceTimers[name]) {
+                clearTimeout(silenceTimers[name]);
+                delete silenceTimers[name];
+            }
+
+            if (!activeSpeechDivs[name]) {
+                criarBalaoChat(name, color);
+            }
+
+            const currentTextDiv = activeSpeechDivs[name].querySelector('.chat-text');
             currentTextDiv.innerText = textoFormatado;
             currentTextDiv.classList.remove('interim');
             activeSpeechDivs[name] = null; // Libera para próxima frase
+            delete lastInterimTexts[name];
         } else {
+            // Se a nova mensagem provisória não for continuação da frase anterior, travar o balão antigo e criar um novo
+            const prevInterim = lastInterimTexts[name] || '';
+            if (activeSpeechDivs[name] && prevInterim && !textoFormatado.toLowerCase().startsWith(prevInterim.substring(0, Math.min(12, prevInterim.length)).toLowerCase())) {
+                finalizeSpeakerBubble(name);
+            }
+
+            if (!activeSpeechDivs[name]) {
+                criarBalaoChat(name, color);
+            }
+
+            const currentTextDiv = activeSpeechDivs[name].querySelector('.chat-text');
             currentTextDiv.innerText = textoFormatado + " ...";
             currentTextDiv.classList.add('interim');
+            lastInterimTexts[name] = textoFormatado;
+
+            // Timer de Silêncio: Se o transmissor pausar 1.5s sem atualizar, travar o balão para NUNCA sobrescrever!
+            if (silenceTimers[name]) {
+                clearTimeout(silenceTimers[name]);
+            }
+            silenceTimers[name] = setTimeout(() => {
+                finalizeSpeakerBubble(name);
+            }, 1500);
         }
 
         // Auto-scroll automático e garantido para a última mensagem
