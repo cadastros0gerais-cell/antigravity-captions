@@ -794,3 +794,38 @@ body {
     .subtitle-content { font-size: 22px; }
     .dict-add-form { grid-template-columns: 1fr; }
 }
+
+/* HEADER ACTIONS & TOAST */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.toast-notification {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #10b981;
+    color: #ffffff;
+    padding: 12px 24px;
+    border-radius: 30px;
+    font-weight: 600;
+    font-size: 14px;
+    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+    z-index: 9999;
+    animation: fadeInOut 3s ease forwards;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translate(-50%, 20px); }
+    15% { opacity: 1; transform: translate(-50%, 0); }
+    85% { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; transform: translate(-50%, -10px); }
+}

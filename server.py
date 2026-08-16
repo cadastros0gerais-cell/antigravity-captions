@@ -58,8 +58,9 @@ class RoomConnectionManager:
         if room_id in self.rooms and websocket in self.rooms[room_id]:
             self.rooms[room_id].remove(websocket)
             if len(self.rooms[room_id]) == 0:
-                # Mantém o histórico em arquivo, mas remove da memória se vazia
-                pass
+                del self.rooms[room_id]
+                if room_id in self.history:
+                    del self.history[room_id]
 
     async def broadcast(self, message: str, room_id: str = "main"):
         if room_id not in self.rooms:
@@ -106,12 +107,11 @@ async def serve_dicionario():
 @app.get("/api/status")
 async def get_status():
     total_connections = sum(len(conns) for conns in manager.rooms.values())
-    rooms_summary = {room: len(conns) for room, conns in manager.rooms.items()}
     return {
         "status": "online",
         "app": "Antigravity Live Captions",
         "totalConnections": total_connections,
-        "rooms": rooms_summary
+        "activeRoomsCount": len(manager.rooms)
     }
 
 @app.get("/api/dicionario")

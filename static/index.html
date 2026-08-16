@@ -38,6 +38,7 @@
                     <label for="roomIdInput">Identificador da Sala / Reunião:</label>
                     <div class="input-group">
                         <input type="text" id="roomIdInput" value="main" placeholder="Ex: reuniao-diretoria" />
+                        <button id="generateRandomRoomBtn" class="btn btn-outline" type="button" title="Gerar ID de sala privada aleatório">🎲 Gerar Privada</button>
                     </div>
                 </div>
 
@@ -67,7 +68,11 @@
                 <div class="panel-header">
                     <button class="btn-back" id="backFromTransmissorBtn">← Voltar</button>
                     <h2>Painel do Transmissor</h2>
-                    <span class="badge badge-role">Transmissor</span>
+                    <div class="header-actions">
+                        <button id="shareTransmitterLinkBtn" class="btn btn-outline" title="Copiar link direto para receptores">🔗 Copiar Link</button>
+                        <button id="qrTransmitterBtn" class="btn btn-outline" title="Exibir QR Code da sala">📱 QR Code</button>
+                        <span class="badge badge-role">Transmissor</span>
+                    </div>
                 </div>
 
                 <div class="transmitter-controls">
@@ -110,6 +115,8 @@
                 </div>
                 
                 <div class="toolbar-right">
+                    <button id="shareReceiverLinkBtn" class="btn btn-outline" title="Copiar link direto para outros leitores">🔗 Copiar Link</button>
+                    <button id="qrReceiverBtn" class="btn btn-outline" title="Exibir QR Code para entrar na sala">📱 QR Code</button>
                     <button id="openDictModalBtn" class="btn btn-outline" title="Adicionar palavras ao dicionário">📖 Dicionário</button>
                     <button id="exportLogBtn" class="btn btn-outline" title="Baixar histórico da reunião">📥 Baixar Log</button>
                     <button id="clearCaptionsBtn" class="btn btn-icon-only" title="Limpar tela">🗑️</button>
@@ -158,6 +165,28 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=6"></script>
+    <!-- MODAL DE QR CODE DA SALA -->
+    <div id="qrModal" class="modal-overlay" style="display: none;">
+        <div class="modal-card glass-card text-center" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>📱 QR Code da Sala</h3>
+                <button id="closeQrModalBtn" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted" style="margin-bottom: 15px;">Escaneie o QR Code abaixo com a câmera do celular para entrar nesta sala de legendas instantaneamente:</p>
+                <div class="qr-container" style="background: white; padding: 15px; border-radius: 12px; display: inline-block;">
+                    <img id="qrCodeImage" src="" alt="QR Code da Sala" style="width: 220px; height: 220px; display: block;" />
+                </div>
+                <div style="margin-top: 15px;">
+                    <button id="copyQrLinkBtn" class="btn btn-primary" style="width: 100%;">🔗 Copiar Link Direto</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST DE NOTIFICAÇÃO -->
+    <div id="toastNotification" class="toast-notification" style="display: none;"></div>
+
+    <script src="/static/app.js?v=7"></script>
 </body>
 </html>

@@ -48,7 +48,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const addDictTermBtn = document.getElementById('addDictTermBtn');
     const dictTermsList = document.getElementById('dictTermsList');
 
-    // --- ESTADO DA APLICAÇÃO ---
+    // Elementos de Compartilhamento & Sala Privada
+    const generateRandomRoomBtn = document.getElementById('generateRandomRoomBtn');
+    const shareTransmitterLinkBtn = document.getElementById('shareTransmitterLinkBtn');
+    const qrTransmitterBtn = document.getElementById('qrTransmitterBtn');
+    const shareReceiverLinkBtn = document.getElementById('shareReceiverLinkBtn');
+    const qrReceiverBtn = document.getElementById('qrReceiverBtn');
+    const qrModal = document.getElementById('qrModal');
+    const closeQrModalBtn = document.getElementById('closeQrModalBtn');
+    const qrCodeImage = document.getElementById('qrCodeImage');
+    const copyQrLinkBtn = document.getElementById('copyQrLinkBtn');
+    const toastNotification = document.getElementById('toastNotification');
     let currentRole = null; // 'transmissor' | 'receptor'
     let currentRoom = 'main';
     let ws = null;
@@ -568,4 +578,131 @@ document.addEventListener('DOMContentLoaded', () => {
             dictTermsList.appendChild(item);
         });
     }
+
+    // --- LÓGICA DE SALA PRIVADA & COMPARTILHAMENTO ---
+    function generateRandomRoomId() {
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        let randomStr = '';
+        for (let i = 0; i < 6; i++) {
+            randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return `sala-${randomStr}`;
+    }
+
+    if (generateRandomRoomBtn) {
+        generateRandomRoomBtn.addEventListener('click', () => {
+            const newRoom = generateRandomRoomId();
+            roomIdInput.value = newRoom;
+            showToast(`🎲 Sala privada gerada: ${newRoom}`);
+        });
+    }
+
+    function showToast(message) {
+        if (!toastNotification) return;
+        toastNotification.innerText = message;
+        toastNotification.style.display = 'block';
+        setTimeout(() => {
+            toastNotification.style.display = 'none';
+        }, 3000);
+    }
+
+    function getShareableLink(targetRole = 'receptor') {
+        const room = currentRoom || roomIdInput.value.trim() || 'main';
+        const url = new URL(window.location.origin + window.location.pathname);
+        url.searchParams.set('room', room);
+        url.searchParams.set('role', targetRole);
+        return url.toString();
+    }
+
+    function copyToClipboard(text, successMsg = '🔗 Link copiado!') {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast(successMsg);
+            }).catch(() => fallbackCopyTextToClipboard(text, successMsg));
+        } else {
+            fallbackCopyTextToClipboard(text, successMsg);
+        }
+    }
+
+    function fallbackCopyTextToClipboard(text, successMsg) {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showToast(successMsg);
+        } catch (err) {
+            alert("Copie o link manualmente: " + text);
+        }
+        document.body.removeChild(textArea);
+    }
+
+    // Handlers dos Botões de Copiar Link
+    if (shareTransmitterLinkBtn) {
+        shareTransmitterLinkBtn.addEventListener('click', () => {
+            copyToClipboard(getShareableLink('receptor'), '🔗 Link para Receptores copiado!');
+        });
+    }
+
+    if (shareReceiverLinkBtn) {
+        shareReceiverLinkBtn.addEventListener('click', () => {
+            copyToClipboard(getShareableLink('receptor'), '🔗 Link da Sala copiado!');
+        });
+    }
+
+    // Modal de QR Code
+    function openQrModal() {
+        const link = getShareableLink('receptor');
+        qrCodeImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(link)}`;
+        qrModal.style.display = 'flex';
+    }
+
+    if (qrTransmitterBtn) qrTransmitterBtn.addEventListener('click', openQrModal);
+    if (qrReceiverBtn) qrReceiverBtn.addEventListener('click', openQrModal);
+
+    if (closeQrModalBtn) {
+        closeQrModalBtn.addEventListener('click', () => {
+            qrModal.style.display = 'none';
+        });
+    }
+
+    if (qrModal) {
+        qrModal.addEventListener('click', (e) => {
+            if (e.target === qrModal) {
+                qrModal.style.display = 'none';
+            }
+        });
+    }
+
+    if (copyQrLinkBtn) {
+        copyQrLinkBtn.addEventListener('click', () => {
+            copyToClipboard(getShareableLink('receptor'), '🔗 Link direto copiado!');
+        });
+    }
+
+    // AUTO-CONEXÃO VIA PARÂMETROS DE URL (?room=XYZ&role=receptor)
+    function handleUrlParams() {
+        const params = new URLSearchParams(window.location.search);
+        const roomParam = params.get('room');
+        const roleParam = params.get('role');
+
+        if (roomParam) {
+            roomIdInput.value = roomParam.trim();
+        }
+
+        if (roleParam === 'receptor') {
+            setTimeout(() => {
+                selectReceptorBtn.click();
+            }, 100);
+        } else if (roleParam === 'transmissor') {
+            setTimeout(() => {
+                selectTransmissorBtn.click();
+            }, 100);
+        }
+    }
+
+    handleUrlParams();
 });
