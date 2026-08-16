@@ -242,6 +242,24 @@ document.addEventListener('DOMContentLoaded', () => {
         return txt;
     }
 
+    // --- GERENCIAMENTO E SAÍDA LIMPA DA SALA ---
+    function exitRoom(isBrowserPopState = false) {
+        stopRecording();
+        currentRole = null;
+        if (ws) {
+            try { ws.close(); } catch(e){}
+            ws = null;
+        }
+        roomBadge.style.display = 'none';
+        if (openUsersModalBtn) openUsersModalBtn.style.display = 'none';
+        if (captionsContainer) captionsContainer.innerHTML = '';
+        switchView('roleSelection');
+
+        if (!isBrowserPopState && history.state && history.state.inRoom) {
+            try { history.back(); } catch(e){}
+        }
+    }
+
     // --- LÓGICA DO TRANSMISSOR ---
     selectTransmissorBtn.addEventListener('click', () => {
         const room = roomIdInput.value.trim() || 'main';
@@ -250,14 +268,14 @@ document.addEventListener('DOMContentLoaded', () => {
         switchView('transmitter');
         initWebSocket(room);
         setupSpeechRecognition();
+
+        if (!history.state || !history.state.inRoom) {
+            history.pushState({ inRoom: true, room: room }, "", window.location.href);
+        }
     });
 
     backFromTransmissorBtn.addEventListener('click', () => {
-        stopRecording();
-        currentRole = null;
-        if (ws) ws.close();
-        roomBadge.style.display = 'none';
-        switchView('roleSelection');
+        exitRoom();
     });
 
     function setupSpeechRecognition() {
@@ -357,11 +375,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function stopRecording() {
         isRecording = false;
         if (recognition) {
-            try { recognition.stop(); } catch(e){}
+            try {
+                recognition.abort();
+                recognition.stop();
+            } catch(e){}
         }
         toggleMicBtn.classList.remove('recording');
         micBtnText.innerText = "Iniciar Microfone";
         micStatusText.innerText = "Microfone pausado";
+
+        if (mediaStream) {
+            try {
+                mediaStream.getTracks().forEach(track => track.stop());
+            } catch(e){}
+            mediaStream = null;
+        }
 
         if (audioContext) {
             try { audioContext.close(); } catch(e){}
@@ -369,6 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (animationFrameId) {
             cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
         }
     }
 
@@ -431,14 +460,35 @@ document.addEventListener('DOMContentLoaded', () => {
         waitingRoomName.innerText = room;
         switchView('receiver');
         initWebSocket(room);
+
+        if (!history.state || !history.state.inRoom) {
+            history.pushState({ inRoom: true, room: room }, "", window.location.href);
+        }
     });
 
     backFromReceptorBtn.addEventListener('click', () => {
-        currentRole = null;
-        if (ws) ws.close();
-        roomBadge.style.display = 'none';
-        captionsContainer.innerHTML = '';
-        switchView('roleSelection');
+        exitRoom();
+    });
+
+    // ESCUTAR NAVEGAÇÃO DO BROWSER ("VOLTAR") E FECHAMENTO DE ABA
+    window.addEventListener('popstate', (event) => {
+        if (currentRole) {
+            exitRoom(true);
+        }
+    });
+
+    window.addEventListener('beforeunload', () => {
+        stopRecording();
+        if (ws) {
+            try { ws.close(); } catch(e){}
+        }
+    });
+
+    window.addEventListener('pagehide', () => {
+        stopRecording();
+        if (ws) {
+            try { ws.close(); } catch(e){}
+        }
     });
 
     // Alternar entre Modo Chat e Modo Subtitle/Legenda
