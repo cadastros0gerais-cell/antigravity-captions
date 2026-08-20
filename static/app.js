@@ -128,7 +128,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeSpeechDivs = {}; // senderId -> bubble element
     let silenceTimers = {};   // senderId -> timer
     let lastInterimTexts = {};// senderId -> interim string
-    let recentFinalTextsBySender = {}; // senderId -> string (deduplicar mensagens idênticas consecutivas)
+    let recentFinalTextsBySender = {}; // senderId -> string
+    let lastFinalizedBubbles = {}; // senderId -> { element, timestamp }
     let lastSentInterimText = '';
 
     // Teleprompter e Visualização
@@ -431,16 +432,8 @@ document.addEventListener('DOMContentLoaded', () => {
         let restartTimeout = null;
         recognition.onend = () => {
             sentFinalIndices.clear();
+            lastSentInterimText = '';
             if (isRecording) {
-                if (lastSentInterimText && ws && ws.readyState === WebSocket.OPEN) {
-                    const userName = transmitterNameInput.value.trim() || "Anônimo";
-                    if (lastSentInterimText.toLowerCase() !== lastSentFinalText.toLowerCase()) {
-                        ws.send(JSON.stringify({ name: userName, text: lastSentInterimText, isFinal: true }));
-                        lastSentFinalText = lastSentInterimText;
-                    }
-                    lastSentInterimText = '';
-                }
-
                 clearTimeout(restartTimeout);
                 restartTimeout = setTimeout(() => {
                     if (isRecording) {
@@ -704,6 +697,18 @@ document.addEventListener('DOMContentLoaded', () => {
         delete lastInterimTexts[senderKey];
     }
 
+    function calculateWordOverlapRatio(str1, str2) {
+        if (!str1 || !str2) return 0;
+        const words1 = new Set(str1.toLowerCase().replace(/[^\w\sà-ú]/gi, '').split(/\s+/).filter(Boolean));
+        const words2 = new Set(str2.toLowerCase().replace(/[^\w\sà-ú]/gi, '').split(/\s+/).filter(Boolean));
+        if (words1.size === 0 || words2.size === 0) return 0;
+
+        let intersection = 0;
+        words1.forEach(w => { if (words2.has(w)) intersection++; });
+        const smallerSize = Math.min(words1.size, words2.size);
+        return intersection / smallerSize;
+    }
+
     // PROCESSAR MENSAGENS NO RECEPTOR (ISOLAMENTO POR SENDER ID & DESDUPLICAÇÃO)
     function processarMensagemReceptor(data) {
         const name = data.name || "Anônimo";
@@ -719,7 +724,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (connectionWaiting) connectionWaiting.style.display = 'none';
         const color = getSpeakerColor(name);
-        const textoFormatado = aplicarSubstituicoes(text);
+        let textoFormatado = aplicarSubstituicoes(text);
 
         // Atualizar overlay do Teleprompter
         if (subtitleSpeaker) {
@@ -740,16 +745,30 @@ document.addEventListener('DOMContentLoaded', () => {
             const currentText = textoFormatado.trim().toLowerCase();
 
             if (lastText) {
-                // Se for idêntico ao texto anterior do mesmo emissor
                 if (currentText === lastText) return;
 
-                // Se o Safari transmitiu a frase inteira acomulada novamente com o início repetido
                 if (currentText.startsWith(lastText) && lastText.length > 4) {
                     const onlyNewText = textoFormatado.trim().substring(recentFinalTextsBySender[senderKey].length).trim();
                     if (!onlyNewText) return;
                     textoFormatado = onlyNewText;
                 }
             }
+
+            // ATUALIZAÇÃO POR ALTA SIMILARIDADE (Substitui refinamentos do motor em vez de criar bolha dupla)
+            const lastBubbleInfo = lastFinalizedBubbles[senderKey];
+            if (lastBubbleInfo && lastBubbleInfo.element && (Date.now() - lastBubbleInfo.timestamp < 6000)) {
+                const prevText = lastBubbleInfo.element.querySelector('.chat-text')?.innerText || '';
+                const similarity = calculateWordOverlapRatio(prevText, textoFormatado);
+                if (similarity >= 0.58) {
+                    const textDiv = lastBubbleInfo.element.querySelector('.chat-text');
+                    if (textDiv) textDiv.innerText = textoFormatado;
+                    recentFinalTextsBySender[senderKey] = textoFormatado.trim();
+                    lastFinalizedBubbles[senderKey].timestamp = Date.now();
+                    scrollToBottom();
+                    return;
+                }
+            }
+
             recentFinalTextsBySender[senderKey] = textoFormatado.trim();
 
             if (silenceTimers[senderKey]) {
@@ -760,7 +779,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!activeSpeechDivs[senderKey]) {
                 criarBalaoChat(name, color, senderKey);
             } else {
-                // Atualizar o nome caso o participante tenha alterado
                 const speakerDiv = activeSpeechDivs[senderKey].querySelector('.chat-speaker span');
                 if (speakerDiv) speakerDiv.innerText = name;
             }
@@ -768,6 +786,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const currentTextDiv = activeSpeechDivs[senderKey].querySelector('.chat-text');
             currentTextDiv.innerText = textoFormatado;
             currentTextDiv.classList.remove('interim');
+
+            lastFinalizedBubbles[senderKey] = {
+                element: activeSpeechDivs[senderKey],
+                timestamp: Date.now()
+            };
+
             activeSpeechDivs[senderKey] = null;
             delete lastInterimTexts[senderKey];
         } else {
