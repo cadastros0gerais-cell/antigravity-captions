@@ -3,28 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Antigravity - Transcrição & Legendas ao Vivo</title>
+    <title>Antigravity Live Captions & Transcriptions</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=6">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css?v=8">
 </head>
 <body>
-    <div class="app-background">
-        <div class="bg-glow bg-glow-1"></div>
-        <div class="bg-glow bg-glow-2"></div>
-    </div>
+    <div class="app-background"></div>
 
     <!-- MAIN NAVBAR -->
     <header class="navbar">
         <div class="nav-brand">
-            <span class="logo-icon">⚡</span>
+            <span class="logo-dot"></span>
             <span class="logo-text">Antigravity <small>Captions</small></span>
         </div>
         <div class="nav-info">
-            <button id="openUsersModalBtn" class="btn btn-outline" style="display:none; padding: 4px 12px; font-size: 13px;" title="Ver lista de participantes">👥 <span id="usersCountBadge">0</span></button>
+            <button id="openUsersModalBtn" class="btn btn-subtle btn-sm" style="display:none;" title="Ver lista de participantes">
+                👥 <span id="usersCountBadge">0</span>
+            </button>
             <span id="roomBadge" class="badge badge-room" style="display:none;">Sala: <strong id="currentRoomText">main</strong></span>
-            <span id="statusBadge" class="badge badge-disconnected">Desconectado</span>
+            <span id="statusBadge" class="badge badge-disconnected">
+                <span class="status-indicator"></span>
+                <span id="statusText">Desconectado</span>
+            </span>
         </div>
     </header>
 
@@ -32,32 +34,34 @@
         <!-- SCREEN 1: SELEÇÃO DE PAPEL -->
         <section id="roleSelectionView" class="view active">
             <div class="hero-container">
-                <h1 class="hero-title">Legendas ao Vivo & Transcrição</h1>
-                <p class="hero-subtitle">Conecte sua voz ao navegador e transmita texto em tempo real para qualquer pessoa na rede ou internet.</p>
+                <div class="hero-header">
+                    <h1 class="hero-title">Transcrição & Legendas ao Vivo</h1>
+                    <p class="hero-subtitle">Transmita sua fala em tempo real ou acompanhe legendas ao vivo com alta precisão e correções dinâmicas.</p>
+                </div>
                 
-                <div class="room-selector-box glass-card">
-                    <label for="roomIdInput">Identificador da Sala / Reunião:</label>
+                <div class="room-selector-box main-card">
+                    <label for="roomIdInput">Identificador da Sala</label>
                     <div class="input-group">
-                        <input type="text" id="roomIdInput" value="main" placeholder="Ex: reuniao-diretoria" />
-                        <button id="generateRandomRoomBtn" class="btn btn-outline" type="button" title="Gerar ID de sala aleatório">🎲 Sala Aleatória</button>
+                        <input type="text" id="roomIdInput" value="main" placeholder="Ex: reuniao-1" />
+                        <button id="generateRandomRoomBtn" class="btn btn-outline" type="button" title="Gerar ID de sala aleatório">🎲 Aleatória</button>
                     </div>
                 </div>
 
                 <div class="role-grid">
                     <!-- CARD TRANSMISSOR -->
-                    <div class="role-card glass-card" id="selectTransmissorBtn">
-                        <div class="role-icon mic-glow">🎙️</div>
+                    <div class="role-card main-card" id="selectTransmissorBtn">
+                        <div class="role-icon">🎙️</div>
                         <h2>Transmissor</h2>
-                        <p>Fale no seu microfone. Sua fala será transcrita pelo navegador e enviada em tempo real para a sala.</p>
-                        <button class="btn btn-primary">Entrar como Transmissor →</button>
+                        <p>Fale no seu microfone. Sua voz será transcrita e transmitida instantaneamente para todos os receptores.</p>
+                        <button class="btn btn-primary w-full">Entrar como Transmissor →</button>
                     </div>
 
                     <!-- CARD RECEPTOR -->
-                    <div class="role-card glass-card" id="selectReceptorBtn">
-                        <div class="role-icon screen-glow">📺</div>
+                    <div class="role-card main-card" id="selectReceptorBtn">
+                        <div class="role-icon">📺</div>
                         <h2>Receptor</h2>
-                        <p>Assista às legendas ao vivo na tela. Aplica correções fonéticas automáticas, modo teleprompter e download do histórico.</p>
-                        <button class="btn btn-secondary">Entrar como Receptor →</button>
+                        <p>Assista às legendas em tempo real na tela. Inclui modo chat, teleprompter, busca e exportação.</p>
+                        <button class="btn btn-secondary w-full">Entrar como Receptor →</button>
                     </div>
                 </div>
             </div>
@@ -65,38 +69,46 @@
 
         <!-- SCREEN 2: PAINEL DO TRANSMISSOR -->
         <section id="transmitterView" class="view">
-            <div class="panel-container glass-card">
+            <div class="panel-container main-card">
                 <div class="panel-header">
                     <button class="btn-back" id="backFromTransmissorBtn">← Voltar</button>
-                    <h2>Painel do Transmissor</h2>
+                    <h2>Painel de Transmissão</h2>
                     <div class="header-actions">
-                        <button id="shareRoomBtnTransmitter" class="btn btn-outline" title="Compartilhar sala">🔗 Compartilhar</button>
+                        <button id="shareRoomBtnTransmitter" class="btn btn-outline btn-sm" title="Compartilhar sala">🔗 Compartilhar</button>
                         <span class="badge badge-role">Transmissor</span>
                     </div>
                 </div>
 
                 <div class="transmitter-controls">
-                    <div class="form-group">
-                        <label for="transmitterNameInput">Seu Nome / Identificador:</label>
-                        <input type="text" id="transmitterNameInput" placeholder="Ex: Guilherme" />
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label for="transmitterNameInput">Seu Nome / Identificador:</label>
+                            <input type="text" id="transmitterNameInput" placeholder="Ex: Guilherme" />
+                        </div>
+                        <div class="form-group flex-1">
+                            <label for="micDeviceSelect">Microfone:</label>
+                            <select id="micDeviceSelect" class="form-select">
+                                <option value="">Microfone Padrão do Sistema</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div class="mic-action-area">
                         <button id="toggleMicBtn" class="btn-mic">
-                            <span class="mic-icon">🎙️</span>
+                            <span class="mic-icon-wrapper">🎙️</span>
                             <span id="micBtnText">Iniciar Microfone</span>
                         </button>
                     </div>
 
                     <!-- VISUALIZADOR DE ONDA DO MICROFONE -->
                     <div class="audio-visualizer-box">
-                        <canvas id="vuMeterCanvas" width="300" height="40"></canvas>
+                        <canvas id="vuMeterCanvas" width="300" height="12"></canvas>
                         <div id="micStatusText" class="mic-status-info">Microfone desligado</div>
                     </div>
 
                     <!-- PRÉ-VISUALIZAÇÃO DA FALA -->
                     <div class="live-preview-box">
-                        <label>Sua fala em tempo real:</label>
+                        <div class="preview-label">Sua fala em tempo real:</div>
                         <div id="liveTextPreview" class="preview-text">Aguardando início da gravação...</div>
                     </div>
                 </div>
@@ -105,20 +117,27 @@
 
         <!-- SCREEN 3: PAINEL DO RECEPTOR -->
         <section id="receiverView" class="view">
-            <div class="receiver-toolbar glass-card">
+            <div class="receiver-toolbar main-card">
                 <div class="toolbar-left">
                     <button class="btn-back" id="backFromReceptorBtn">← Voltar</button>
                     <div class="mode-toggles">
-                        <button id="modeChatBtn" class="btn-toggle active">💬 Modo Chat</button>
-                        <button id="modeSubtitleBtn" class="btn-toggle">📺 Modo Legenda</button>
+                        <button id="modeChatBtn" class="btn-toggle active">💬 Chat</button>
+                        <button id="modeSubtitleBtn" class="btn-toggle">📺 Teleprompter</button>
+                    </div>
+                    <div class="search-box">
+                        <input type="text" id="searchInput" placeholder="🔍 Buscar no histórico..." />
                     </div>
                 </div>
                 
                 <div class="toolbar-right">
-                    <button id="shareRoomBtnReceiver" class="btn btn-outline" title="Compartilhar sala">🔗 Compartilhar</button>
-                    <button id="openDictModalBtn" class="btn btn-outline" title="Adicionar palavras ao dicionário">📖 Dicionário</button>
-                    <button id="exportLogBtn" class="btn btn-outline" title="Baixar histórico da reunião">📥 Baixar Log</button>
-                    <button id="clearCaptionsBtn" class="btn btn-icon-only" title="Limpar tela">🗑️</button>
+                    <div class="teleprompter-controls" id="teleprompterControls" style="display: none;">
+                        <button id="fontSmallerBtn" class="btn btn-outline btn-sm" title="Diminuir texto">A-</button>
+                        <button id="fontBiggerBtn" class="btn btn-outline btn-sm" title="Aumentar texto">A+</button>
+                    </div>
+                    <button id="openDictModalBtn" class="btn btn-outline btn-sm" title="Gerenciar dicionário fonético">📖 Dicionário</button>
+                    <button id="shareRoomBtnReceiver" class="btn btn-outline btn-sm" title="Compartilhar sala">🔗 Compartilhar</button>
+                    <button id="exportLogBtn" class="btn btn-outline btn-sm" title="Baixar histórico da reunião">📥 Log</button>
+                    <button id="clearCaptionsBtn" class="btn btn-outline btn-sm text-danger" title="Limpar tela">🗑️ Limpar</button>
                 </div>
             </div>
 
@@ -142,13 +161,13 @@
 
     <!-- MODAL DE EDIÇÃO DO DICIONÁRIO FONÉTICO -->
     <div id="dictModal" class="modal-overlay" style="display: none;">
-        <div class="modal-card glass-card">
+        <div class="modal-card main-card">
             <div class="modal-header">
-                <h3>📖 Dicionário de Termos & Correção Fonética</h3>
+                <h3>📖 Dicionário de Correção Fonética</h3>
                 <button id="closeDictModalBtn" class="btn-close">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Adicione palavras que o navegador costuma entender errado para substituir automaticamente pela versão correta.</p>
+                <p class="text-muted">Substitui automaticamente termos compreendidos incorretamente pelo navegador.</p>
 
                 <div class="dict-add-form">
                     <input type="text" id="dictPalavraInput" placeholder="Como o navegador ouve (ex: quei frame)" />
@@ -157,7 +176,7 @@
                 </div>
 
                 <div class="dict-list-box">
-                    <h4>Termos cadastrados no servidor:</h4>
+                    <div class="dict-list-header">Termos Cadastrados no Servidor:</div>
                     <div id="dictTermsList" class="dict-terms-grid">Carregando termos...</div>
                 </div>
             </div>
@@ -166,21 +185,21 @@
 
     <!-- MODAL UNIFICADO DE COMPARTILHAMENTO DA SALA -->
     <div id="shareModal" class="modal-overlay" style="display: none;">
-        <div class="modal-card glass-card text-center" style="max-width: 420px;">
+        <div class="modal-card main-card text-center" style="max-width: 420px;">
             <div class="modal-header">
                 <h3>🔗 Compartilhar Sala</h3>
                 <button id="closeShareModalBtn" class="btn-close">&times;</button>
             </div>
             <div class="modal-body">
-                <p class="text-muted" style="margin-bottom: 15px; font-size: 13px;">Convidados que acessarem este link entram direto nesta sala e escolhem se querem Transmitir ou Apenas Assistir:</p>
+                <p class="text-muted" style="margin-bottom: 16px; font-size: 13px;">Compartilhe este link com transmissores e receptores:</p>
                 
                 <div class="input-group" style="margin-bottom: 20px;">
                     <input type="text" id="shareLinkInput" readonly style="font-size: 13px; text-align: center;" />
                     <button id="copyShareLinkBtn" class="btn btn-primary" type="button">📋 Copiar Link</button>
                 </div>
 
-                <div class="qr-container" style="background: white; padding: 15px; border-radius: 12px; display: inline-block;">
-                    <img id="shareQrCodeImage" src="" alt="QR Code da Sala" style="width: 200px; height: 200px; display: block;" />
+                <div class="qr-container">
+                    <img id="shareQrCodeImage" src="" alt="QR Code da Sala" />
                 </div>
             </div>
         </div>
@@ -188,13 +207,13 @@
 
     <!-- MODAL DE LISTA DE PARTICIPANTES -->
     <div id="usersModal" class="modal-overlay" style="display: none;">
-        <div class="modal-card glass-card" style="max-width: 450px;">
+        <div class="modal-card main-card" style="max-width: 460px;">
             <div class="modal-header">
                 <h3>👥 Participantes Conectados</h3>
                 <button id="closeUsersModalBtn" class="btn-close">&times;</button>
             </div>
             <div class="modal-body">
-                <p class="text-muted" style="margin-bottom: 15px;">Pessoas presentes nesta sala em tempo real:</p>
+                <p class="text-muted" style="margin-bottom: 16px; font-size: 13px;">Pessoas presentes nesta sala em tempo real:</p>
                 <div id="usersListContainer" class="users-list-grid">Carregando lista...</div>
             </div>
         </div>
@@ -203,6 +222,6 @@
     <!-- TOAST DE NOTIFICAÇÃO -->
     <div id="toastNotification" class="toast-notification" style="display: none;"></div>
 
-    <script src="/static/app.js?v=7"></script>
+    <script src="/static/app.js?v=8"></script>
 </body>
 </html>

@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const roomBadge = document.getElementById('roomBadge');
     const currentRoomText = document.getElementById('currentRoomText');
     const statusBadge = document.getElementById('statusBadge');
+    const statusText = document.getElementById('statusText');
 
     // Botões de Seleção de Papel
     const selectTransmissorBtn = document.getElementById('selectTransmissorBtn');
@@ -19,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Transmitter Elements
     const backFromTransmissorBtn = document.getElementById('backFromTransmissorBtn');
     const transmitterNameInput = document.getElementById('transmitterNameInput');
+    const micDeviceSelect = document.getElementById('micDeviceSelect');
     const toggleMicBtn = document.getElementById('toggleMicBtn');
     const micBtnText = document.getElementById('micBtnText');
     const micStatusText = document.getElementById('micStatusText');
@@ -29,6 +31,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const backFromReceptorBtn = document.getElementById('backFromReceptorBtn');
     const modeChatBtn = document.getElementById('modeChatBtn');
     const modeSubtitleBtn = document.getElementById('modeSubtitleBtn');
+    const searchInput = document.getElementById('searchInput');
+    const teleprompterControls = document.getElementById('teleprompterControls');
+    const fontSmallerBtn = document.getElementById('fontSmallerBtn');
+    const fontBiggerBtn = document.getElementById('fontBiggerBtn');
     const captionsWrapper = document.getElementById('captionsWrapper');
     const captionsContainer = document.getElementById('captionsContainer');
     const connectionWaiting = document.getElementById('connectionWaiting');
@@ -65,6 +71,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const usersModal = document.getElementById('usersModal');
     const closeUsersModalBtn = document.getElementById('closeUsersModalBtn');
     const usersListContainer = document.getElementById('usersListContainer');
+    
+    // Variáveis de Estado
     let connectedUsersList = [];
     let myClientId = null;
     let currentRole = null; // 'transmissor' | 'receptor'
@@ -77,22 +85,54 @@ document.addEventListener('DOMContentLoaded', () => {
     let analyser = null;
     let animationFrameId = null;
 
-    // Dicionário de substituições
+    // Resiliência do WebSocket
+    let isManualDisconnect = false;
+    let reconnectAttempts = 0;
+    let reconnectTimeout = null;
+
+    // Desduplicação e Estado de Transmissão por Sender
+    let processedMsgIds = new Set();
+    let activeSpeechDivs = {}; // senderId -> bubble element
+    let silenceTimers = {};   // senderId -> timer
+    let lastInterimTexts = {};// senderId -> interim string
+    let lastSentInterimText = '';
+
+    // Teleprompter e Visualização
+    let subtitleFontSize = 30; // px
+    let currentViewMode = 'chat'; // 'chat' | 'subtitle'
+
+    // Dicionário e Cores
     let abreviacoes = {};
     const speakerColors = {};
     const colorPalette = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#f97316'];
     let colorIndex = 0;
-    let activeSpeechDivs = {};
-    let silenceTimers = {};
-    let lastInterimTexts = {};
-    let lastSentInterimText = '';
-    let currentViewMode = 'chat'; // 'chat' | 'subtitle'
 
     // Carregar nome salvo no localStorage
     const savedName = localStorage.getItem('antigravity_user_name');
-    if (savedName) {
+    if (savedName && transmitterNameInput) {
         transmitterNameInput.value = savedName;
     }
+
+    // --- SELEÇÃO DE MICROFONE DISPONÍVEL ---
+    async function carregarDispositivosMicrofone() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioInputs = devices.filter(d => d.kind === 'audioinput');
+            if (micDeviceSelect) {
+                micDeviceSelect.innerHTML = '<option value="">Microfone Padrão do Sistema</option>';
+                audioInputs.forEach((device, index) => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.innerText = device.label || `Microfone ${index + 1}`;
+                    micDeviceSelect.appendChild(option);
+                });
+            }
+        } catch (err) {
+            console.error("Erro ao enumerar dispositivos de áudio:", err);
+        }
+    }
+    carregarDispositivosMicrofone();
 
     // --- NAVEGAÇÃO DE VIEWS ---
     function switchView(viewName) {
@@ -107,28 +147,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateRoomBadge(room) {
         currentRoom = room.trim() || 'main';
-        currentRoomText.innerText = currentRoom;
-        roomBadge.style.display = 'inline-flex';
+        if (currentRoomText) currentRoomText.innerText = currentRoom;
+        if (roomBadge) roomBadge.style.display = 'inline-flex';
     }
 
     function setStatus(text, statusType) {
-        statusBadge.innerText = text;
-        statusBadge.className = 'badge';
-        if (statusType === 'connected') {
-            statusBadge.classList.add('badge-connected');
-        } else if (statusType === 'connecting') {
-            statusBadge.classList.add('badge-room');
-        } else {
-            statusBadge.classList.add('badge-disconnected');
+        if (statusText) statusText.innerText = text;
+        if (statusBadge) {
+            statusBadge.className = 'badge';
+            if (statusType === 'connected') {
+                statusBadge.classList.add('badge-connected');
+            } else if (statusType === 'connecting') {
+                statusBadge.classList.add('badge-room');
+            } else {
+                statusBadge.classList.add('badge-disconnected');
+            }
         }
     }
 
-    // --- WEBSOCKET ENGINE ---
+    // --- ENGINE WEBSOCKET COM RECONEXÃO AUTOMÁTICA ---
     function initWebSocket(room) {
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
             ws.close();
         }
 
+        clearTimeout(reconnectTimeout);
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws/${encodeURIComponent(room)}`;
 
@@ -136,8 +179,9 @@ document.addEventListener('DOMContentLoaded', () => {
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-            setStatus("Conectado ao vivo", "connected");
-            openUsersModalBtn.style.display = 'inline-flex';
+            reconnectAttempts = 0;
+            setStatus("Conectado", "connected");
+            if (openUsersModalBtn) openUsersModalBtn.style.display = 'inline-flex';
             
             const myName = (currentRole === 'transmissor') 
                 ? (transmitterNameInput.value.trim() || 'Transmissor') 
@@ -155,8 +199,20 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         ws.onclose = () => {
-            setStatus("Desconectado", "disconnected");
-            openUsersModalBtn.style.display = 'none';
+            if (openUsersModalBtn) openUsersModalBtn.style.display = 'none';
+
+            if (!isManualDisconnect && currentRole) {
+                reconnectAttempts++;
+                const delay = Math.min(10000, 1000 * Math.pow(1.4, reconnectAttempts));
+                setStatus(`Reconectando (${reconnectAttempts})...`, "connecting");
+                reconnectTimeout = setTimeout(() => {
+                    if (!isManualDisconnect && currentRole) {
+                        initWebSocket(room);
+                    }
+                }, delay);
+            } else {
+                setStatus("Desconectado", "disconnected");
+            }
         };
 
         ws.onerror = (err) => {
@@ -168,51 +224,37 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const data = JSON.parse(event.data);
 
-                // Boas-vindas com ID do cliente
                 if (data.type === 'welcome') {
                     myClientId = data.clientId;
                     return;
                 }
 
-                // Atualização de Lista de Participantes
                 if (data.type === 'user_list_update') {
                     connectedUsersList = data.users || [];
-                    usersCountBadge.innerText = connectedUsersList.length;
+                    if (usersCountBadge) usersCountBadge.innerText = connectedUsersList.length;
                     renderizarListaParticipantes();
                     return;
                 }
 
-                // Notificação de Entrada
                 if (data.type === 'user_joined') {
                     showToast(`👋 ${data.name} (${data.role}) entrou na sala`);
                     return;
                 }
 
-                // Notificação de Saída
                 if (data.type === 'user_left') {
                     showToast(`🚪 ${data.name} saiu da sala`);
                     return;
                 }
 
-                // Expulsão (Kick)
                 if (data.type === 'kicked') {
-                    alert(data.message || "Você foi desconectado da sala pelo transmissor.");
-                    if (currentRole === 'transmissor') stopRecording();
-                    currentRole = null;
-                    if (ws) ws.close();
-                    roomBadge.style.display = 'none';
-                    switchView('roleSelection');
+                    alert(data.message || "Você foi desconectado da sala por um participante.");
+                    exitRoom();
                     return;
                 }
 
-                // Estatísticas do servidor
-                if (data.type === 'room_stats') {
-                    return;
-                }
-
-                // Processar mensagem de áudio/texto
+                // Processar mensagem de áudio/texto no Receptor
                 if (data.name && data.text !== undefined && currentRole === 'receptor') {
-                    processarMensagemReceptor(data.name, data.text, data.isFinal);
+                    processarMensagemReceptor(data);
                 }
             } catch (e) {
                 console.error("Erro ao ler mensagem WS:", e);
@@ -220,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // --- CARREGAR DICIONÁRIO ---
+    // --- DICIONÁRIO FONÉTICO ---
     function carregarDicionario() {
         fetch('/dicionario.json')
             .then(res => res.json())
@@ -238,24 +280,34 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!texto) return '';
         let txt = texto.toLowerCase();
         for (const [palavra, subst] of Object.entries(abreviacoes)) {
-            if (palavra.startsWith("___")) continue; // Ignora cabeçalhos de categoria
-            const regex = new RegExp(`\\b${palavra}\\b`, 'gi');
+            if (palavra.startsWith("___")) continue;
+            const regex = new RegExp(`\\b${escapeRegExp(palavra)}\\b`, 'gi');
             txt = txt.replace(regex, subst);
         }
         return txt;
     }
 
+    function escapeRegExp(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
     // --- GERENCIAMENTO E SAÍDA LIMPA DA SALA ---
     function exitRoom(isBrowserPopState = false) {
+        isManualDisconnect = true;
+        clearTimeout(reconnectTimeout);
         stopRecording();
         currentRole = null;
         if (ws) {
             try { ws.close(); } catch(e){}
             ws = null;
         }
-        roomBadge.style.display = 'none';
+        if (roomBadge) roomBadge.style.display = 'none';
         if (openUsersModalBtn) openUsersModalBtn.style.display = 'none';
         if (captionsContainer) captionsContainer.innerHTML = '';
+        activeSpeechDivs = {};
+        silenceTimers = {};
+        lastInterimTexts = {};
+        processedMsgIds.clear();
         switchView('roleSelection');
 
         if (!isBrowserPopState && history.state && history.state.inRoom) {
@@ -265,6 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- LÓGICA DO TRANSMISSOR ---
     selectTransmissorBtn.addEventListener('click', () => {
+        isManualDisconnect = false;
         const room = roomIdInput.value.trim() || 'main';
         currentRole = 'transmissor';
         updateRoomBadge(room);
@@ -327,7 +380,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let restartTimeout = null;
         recognition.onend = () => {
             if (isRecording) {
-                // Se havia texto provisório pendente ao pausar, enviar como finalizado para travar o balão
                 if (lastSentInterimText && ws && ws.readyState === WebSocket.OPEN) {
                     const userName = transmitterNameInput.value.trim() || "Anônimo";
                     ws.send(JSON.stringify({ name: userName, text: lastSentInterimText, isFinal: true }));
@@ -339,13 +391,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (isRecording) {
                         try { recognition.start(); } catch (e) {}
                     }
-                }, 300);
+                }, 250);
             }
         };
 
         recognition.onerror = (event) => {
-            console.error("Erro de reconhecimento de voz:", event.error);
-            micStatusText.innerText = `Erro: ${event.error}`;
+            console.error("Erro no reconhecimento de voz:", event.error);
+            if (micStatusText) micStatusText.innerText = `Status: ${event.error}`;
         };
     }
 
@@ -371,7 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleMicBtn.addEventListener('click', () => {
         const name = transmitterNameInput.value.trim();
         if (!name) {
-            alert("Por favor, digite seu nome antes de iniciar a gravação.");
+            alert("Por favor, digite seu nome antes de iniciar o microfone.");
             transmitterNameInput.focus();
             return;
         }
@@ -395,7 +447,6 @@ document.addEventListener('DOMContentLoaded', () => {
             micBtnText.innerText = "Parar Microfone";
             micStatusText.innerText = "Transmitindo áudio ao vivo...";
 
-            // Iniciar VU Meter
             await initAudioVisualizer();
         } catch (e) {
             console.error("Não foi possível iniciar o microfone:", e);
@@ -406,7 +457,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function stopRecording() {
         isRecording = false;
 
-        // Se havia algum trecho provisório no preview ao clicar em Parar Microfone, enviar como finalizado imediatamente
         if (lastSentInterimText && ws && ws.readyState === WebSocket.OPEN) {
             const userName = transmitterNameInput.value.trim() || "Anônimo";
             ws.send(JSON.stringify({ name: userName, text: lastSentInterimText, isFinal: true }));
@@ -421,7 +471,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         toggleMicBtn.classList.remove('recording');
         micBtnText.innerText = "Iniciar Microfone";
-        micStatusText.innerText = "Microfone pausado";
+        micStatusText.innerText = "Microfone desligado";
 
         if (mediaStream) {
             try {
@@ -442,7 +492,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Visualizador de Volume do Microfone (VU Meter)
     async function initAudioVisualizer() {
-        // Em celulares, não abre o getUserMedia secundário para evitar bips/conflitos de som no Android/iOS
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         if (isMobile) {
             vuMeterCanvas.style.display = 'none';
@@ -450,7 +499,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const selectedMicId = micDeviceSelect ? micDeviceSelect.value : '';
+            const constraints = {
+                audio: selectedMicId ? { deviceId: { exact: selectedMicId } } : true
+            };
+
+            mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
             analyser = audioContext.createAnalyser();
             analyser.fftSize = 64;
@@ -474,7 +528,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 canvasCtx.clearRect(0, 0, vuMeterCanvas.width, vuMeterCanvas.height);
                 
-                // Desenhar barra de volume gradiente
                 const barWidth = vuMeterCanvas.width * normVolume;
                 const gradient = canvasCtx.createLinearGradient(0, 0, vuMeterCanvas.width, 0);
                 gradient.addColorStop(0, '#10b981');
@@ -482,7 +535,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 gradient.addColorStop(1, '#ef4444');
 
                 canvasCtx.fillStyle = gradient;
-                canvasCtx.fillRect(0, 10, barWidth, 20);
+                canvasCtx.fillRect(0, 0, barWidth, vuMeterCanvas.height);
             }
 
             draw();
@@ -493,10 +546,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- LÓGICA DO RECEPTOR ---
     selectReceptorBtn.addEventListener('click', () => {
+        isManualDisconnect = false;
         const room = roomIdInput.value.trim() || 'main';
         currentRole = 'receptor';
         updateRoomBadge(room);
-        waitingRoomName.innerText = room;
+        if (waitingRoomName) waitingRoomName.innerText = room;
         switchView('receiver');
         initWebSocket(room);
 
@@ -509,7 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
         exitRoom();
     });
 
-    // ESCUTAR NAVEGAÇÃO DO BROWSER ("VOLTAR") E FECHAMENTO DE ABA
+    // NAVEGAÇÃO DO BROWSER ("VOLTAR") E FECHAMENTO
     window.addEventListener('popstate', (event) => {
         if (currentRole) {
             exitRoom(true);
@@ -523,20 +577,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    window.addEventListener('pagehide', () => {
-        stopRecording();
-        if (ws) {
-            try { ws.close(); } catch(e){}
-        }
-    });
-
-    // Alternar entre Modo Chat e Modo Subtitle/Legenda
+    // MODOS CHAT / TELEPROMPTER E AJUSTE DE FONTE
     modeChatBtn.addEventListener('click', () => {
         currentViewMode = 'chat';
         modeChatBtn.classList.add('active');
         modeSubtitleBtn.classList.remove('active');
         captionsWrapper.style.display = 'flex';
         subtitleOverlay.style.display = 'none';
+        if (teleprompterControls) teleprompterControls.style.display = 'none';
     });
 
     modeSubtitleBtn.addEventListener('click', () => {
@@ -545,7 +593,38 @@ document.addEventListener('DOMContentLoaded', () => {
         modeChatBtn.classList.remove('active');
         captionsWrapper.style.display = 'none';
         subtitleOverlay.style.display = 'block';
+        if (teleprompterControls) teleprompterControls.style.display = 'flex';
     });
+
+    if (fontBiggerBtn) {
+        fontBiggerBtn.addEventListener('click', () => {
+            subtitleFontSize = Math.min(64, subtitleFontSize + 4);
+            if (subtitleText) subtitleText.style.fontSize = `${subtitleFontSize}px`;
+        });
+    }
+
+    if (fontSmallerBtn) {
+        fontSmallerBtn.addEventListener('click', () => {
+            subtitleFontSize = Math.max(18, subtitleFontSize - 4);
+            if (subtitleText) subtitleText.style.fontSize = `${subtitleFontSize}px`;
+        });
+    }
+
+    // BUSCA / FILTRO NO HISTÓRICO
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.trim().toLowerCase();
+            const bubbles = captionsContainer.querySelectorAll('.chat-bubble');
+            bubbles.forEach(bubble => {
+                const text = bubble.innerText.toLowerCase();
+                if (!query || text.includes(query)) {
+                    bubble.style.display = 'block';
+                } else {
+                    bubble.style.display = 'none';
+                }
+            });
+        });
+    }
 
     function getSpeakerColor(name) {
         if (!speakerColors[name]) {
@@ -555,76 +634,99 @@ document.addEventListener('DOMContentLoaded', () => {
         return speakerColors[name];
     }
 
-    function finalizeSpeakerBubble(name) {
-        if (silenceTimers[name]) {
-            clearTimeout(silenceTimers[name]);
-            delete silenceTimers[name];
+    function finalizeSpeakerBubble(senderKey) {
+        if (silenceTimers[senderKey]) {
+            clearTimeout(silenceTimers[senderKey]);
+            delete silenceTimers[senderKey];
         }
-        if (activeSpeechDivs[name]) {
-            const currentTextDiv = activeSpeechDivs[name].querySelector('.chat-text');
+        if (activeSpeechDivs[senderKey]) {
+            const currentTextDiv = activeSpeechDivs[senderKey].querySelector('.chat-text');
             if (currentTextDiv) {
                 currentTextDiv.classList.remove('interim');
             }
-            activeSpeechDivs[name] = null;
+            activeSpeechDivs[senderKey] = null;
         }
-        delete lastInterimTexts[name];
+        delete lastInterimTexts[senderKey];
     }
 
-    function processarMensagemReceptor(name, text, isFinal) {
-        connectionWaiting.style.display = 'none';
+    // PROCESSAR MENSAGENS NO RECEPTOR (ISOLAMENTO POR SENDER ID & DESDUPLICAÇÃO)
+    function processarMensagemReceptor(data) {
+        const name = data.name || "Anônimo";
+        const text = data.text;
+        const isFinal = data.isFinal;
+        const senderKey = data.senderId || name; // Chave única por participante
+        const msgId = data.msgId;
+
+        // Evitar processar mensagens finais duplicadas
+        if (isFinal && msgId && processedMsgIds.has(msgId)) {
+            return;
+        }
+
+        if (connectionWaiting) connectionWaiting.style.display = 'none';
         const color = getSpeakerColor(name);
         const textoFormatado = aplicarSubstituicoes(text);
 
-        // Se estiver no Modo Legenda/Projetor
+        // Modo Subtitle / Teleprompter
         if (currentViewMode === 'subtitle') {
-            subtitleSpeaker.innerText = name;
-            subtitleSpeaker.style.color = color;
-            subtitleText.innerText = textoFormatado;
+            if (subtitleSpeaker) {
+                subtitleSpeaker.innerText = name;
+                subtitleSpeaker.style.color = color;
+            }
+            if (subtitleText) {
+                subtitleText.innerText = textoFormatado;
+                subtitleText.style.fontSize = `${subtitleFontSize}px`;
+            }
             return;
         }
 
         // Modo Chat
         if (isFinal) {
-            if (silenceTimers[name]) {
-                clearTimeout(silenceTimers[name]);
-                delete silenceTimers[name];
+            if (msgId) processedMsgIds.add(msgId);
+
+            if (silenceTimers[senderKey]) {
+                clearTimeout(silenceTimers[senderKey]);
+                delete silenceTimers[senderKey];
             }
 
-            if (!activeSpeechDivs[name]) {
-                criarBalaoChat(name, color);
+            if (!activeSpeechDivs[senderKey]) {
+                criarBalaoChat(name, color, senderKey);
+            } else {
+                // Atualizar o nome caso o participante tenha alterado
+                const speakerDiv = activeSpeechDivs[senderKey].querySelector('.chat-speaker span');
+                if (speakerDiv) speakerDiv.innerText = name;
             }
 
-            const currentTextDiv = activeSpeechDivs[name].querySelector('.chat-text');
+            const currentTextDiv = activeSpeechDivs[senderKey].querySelector('.chat-text');
             currentTextDiv.innerText = textoFormatado;
             currentTextDiv.classList.remove('interim');
-            activeSpeechDivs[name] = null; // Libera para próxima frase
-            delete lastInterimTexts[name];
+            activeSpeechDivs[senderKey] = null;
+            delete lastInterimTexts[senderKey];
         } else {
-            // Se a nova mensagem provisória não for continuação da frase anterior, travar o balão antigo e criar um novo
-            const prevInterim = lastInterimTexts[name] || '';
-            if (activeSpeechDivs[name] && prevInterim && !textoFormatado.toLowerCase().startsWith(prevInterim.substring(0, Math.min(12, prevInterim.length)).toLowerCase())) {
-                finalizeSpeakerBubble(name);
+            const prevInterim = lastInterimTexts[senderKey] || '';
+            if (activeSpeechDivs[senderKey] && prevInterim && !textoFormatado.toLowerCase().startsWith(prevInterim.substring(0, Math.min(12, prevInterim.length)).toLowerCase())) {
+                finalizeSpeakerBubble(senderKey);
             }
 
-            if (!activeSpeechDivs[name]) {
-                criarBalaoChat(name, color);
+            if (!activeSpeechDivs[senderKey]) {
+                criarBalaoChat(name, color, senderKey);
+            } else {
+                const speakerDiv = activeSpeechDivs[senderKey].querySelector('.chat-speaker span');
+                if (speakerDiv) speakerDiv.innerText = name;
             }
 
-            const currentTextDiv = activeSpeechDivs[name].querySelector('.chat-text');
+            const currentTextDiv = activeSpeechDivs[senderKey].querySelector('.chat-text');
             currentTextDiv.innerText = textoFormatado + " ...";
             currentTextDiv.classList.add('interim');
-            lastInterimTexts[name] = textoFormatado;
+            lastInterimTexts[senderKey] = textoFormatado;
 
-            // Timer de Silêncio: Se o transmissor pausar 1.5s sem atualizar, travar o balão para NUNCA sobrescrever!
-            if (silenceTimers[name]) {
-                clearTimeout(silenceTimers[name]);
+            if (silenceTimers[senderKey]) {
+                clearTimeout(silenceTimers[senderKey]);
             }
-            silenceTimers[name] = setTimeout(() => {
-                finalizeSpeakerBubble(name);
+            silenceTimers[senderKey] = setTimeout(() => {
+                finalizeSpeakerBubble(senderKey);
             }, 1500);
         }
 
-        // Auto-scroll automático e garantido para a última mensagem
         scrollToBottom();
     }
 
@@ -636,10 +738,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (anchor) {
             anchor.scrollIntoView({ behavior: 'auto', block: 'end' });
         }
-        window.scrollTo(0, document.body.scrollHeight);
     }
 
-    function criarBalaoChat(name, color) {
+    function criarBalaoChat(name, color, senderKey) {
         const bubble = document.createElement('div');
         bubble.className = 'chat-bubble';
         bubble.style.borderLeftColor = color;
@@ -649,7 +750,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const speakerDiv = document.createElement('div');
         speakerDiv.className = 'chat-speaker';
         speakerDiv.style.color = color;
-        speakerDiv.innerHTML = `<span>${name}</span><time>${timeStr}</time>`;
+        speakerDiv.innerHTML = `<span>${escapeHtml(name)}</span><time>${timeStr}</time>`;
 
         const textDiv = document.createElement('div');
         textDiv.className = 'chat-text';
@@ -658,7 +759,7 @@ document.addEventListener('DOMContentLoaded', () => {
         bubble.appendChild(textDiv);
         captionsContainer.appendChild(bubble);
 
-        activeSpeechDivs[name] = bubble;
+        activeSpeechDivs[senderKey] = bubble;
     }
 
     function carregarHistoricoSala(room) {
@@ -666,9 +767,10 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(res => res.json())
             .then(history => {
                 if (Array.isArray(history) && history.length > 0) {
-                    connectionWaiting.style.display = 'none';
+                    if (connectionWaiting) connectionWaiting.style.display = 'none';
                     history.forEach(item => {
                         if (item.name && item.text) {
+                            if (item.msgId) processedMsgIds.add(item.msgId);
                             const color = getSpeakerColor(item.name);
                             const bubble = document.createElement('div');
                             bubble.className = 'chat-bubble';
@@ -677,7 +779,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             const speakerDiv = document.createElement('div');
                             speakerDiv.className = 'chat-speaker';
                             speakerDiv.style.color = color;
-                            speakerDiv.innerHTML = `<span>${item.name}</span><time>${item.timestamp || ''}</time>`;
+                            speakerDiv.innerHTML = `<span>${escapeHtml(item.name)}</span><time>${item.timestamp || ''}</time>`;
 
                             const textDiv = document.createElement('div');
                             textDiv.className = 'chat-text';
@@ -700,12 +802,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     clearCaptionsBtn.addEventListener('click', () => {
-        captionsContainer.innerHTML = '';
-        activeSpeechDivs = {};
-        connectionWaiting.style.display = 'flex';
+        if (confirm("Deseja limpar as legendas da tela?")) {
+            captionsContainer.innerHTML = '';
+            activeSpeechDivs = {};
+            processedMsgIds.clear();
+            if (connectionWaiting) connectionWaiting.style.display = 'flex';
+        }
     });
 
-    // --- GERENCIAMENTO DO DICIONÁRIO ---
+    // --- DICIONÁRIO FONÉTICO (ADIÇÃO E EXCLUSÃO) ---
     openDictModalBtn.addEventListener('click', () => {
         dictModal.style.display = 'flex';
         renderizarTermosDicionario();
@@ -742,12 +847,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 dictPalavraInput.value = '';
                 dictSubstInput.value = '';
                 renderizarTermosDicionario();
+                showToast("✨ Termo adicionado ao dicionário!");
             } else {
                 alert(data.detail || "Erro ao salvar termo.");
             }
         })
         .catch(err => alert("Erro ao comunicar com o servidor: " + err));
     });
+
+    function removerTermoDicionario(palavra) {
+        if (!confirm(`Deseja remover o termo "${palavra}" do dicionário?`)) return;
+
+        fetch(`/api/dicionario/${encodeURIComponent(palavra)}`, {
+            method: 'DELETE'
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'sucesso') {
+                abreviacoes = data.dicionario;
+                renderizarTermosDicionario();
+                showToast("🗑️ Termo removido com sucesso!");
+            } else {
+                alert(data.detail || "Erro ao remover termo.");
+            }
+        })
+        .catch(err => alert("Erro ao comunicar com o servidor: " + err));
+    }
 
     function renderizarTermosDicionario() {
         dictTermsList.innerHTML = '';
@@ -761,12 +886,24 @@ document.addEventListener('DOMContentLoaded', () => {
         entries.forEach(([palavra, subst]) => {
             const item = document.createElement('div');
             item.className = 'dict-item';
-            item.innerHTML = `<span class="wrong">"${palavra}"</span> → <span class="correct">"${subst}"</span>`;
+            
+            const wordsDiv = document.createElement('div');
+            wordsDiv.className = 'dict-item-words';
+            wordsDiv.innerHTML = `<span class="wrong">"${escapeHtml(palavra)}"</span> → <span class="correct">"${escapeHtml(subst)}"</span>`;
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn-delete-term';
+            delBtn.title = 'Remover termo';
+            delBtn.innerText = '🗑️';
+            delBtn.addEventListener('click', () => removerTermoDicionario(palavra));
+
+            item.appendChild(wordsDiv);
+            item.appendChild(delBtn);
             dictTermsList.appendChild(item);
         });
     }
 
-    // --- LÓGICA DE SALA PRIVADA & COMPARTILHAMENTO ---
+    // --- SALA PRIVADA & COMPARTILHAMENTO ---
     function generateRandomRoomId() {
         const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
         let randomStr = '';
@@ -791,14 +928,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
             toastNotification.style.display = 'none';
         }, 3000);
-    }
-
-    function getShareableLink(targetRole = 'receptor') {
-        const room = currentRoom || roomIdInput.value.trim() || 'main';
-        const url = new URL(window.location.origin + window.location.pathname);
-        url.searchParams.set('room', room);
-        url.searchParams.set('role', targetRole);
-        return url.toString();
     }
 
     function copyToClipboard(text, successMsg = '🔗 Link copiado!') {
@@ -827,7 +956,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.removeChild(textArea);
     }
 
-    // --- MODAL UNIFICADO DE COMPARTILHAMENTO ---
     function getNeutralShareableLink() {
         const room = currentRoom || roomIdInput.value.trim() || 'main';
         const url = new URL(window.location.origin + window.location.pathname);
@@ -868,19 +996,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // LEITURA NEUTRA DE PARÂMETROS DA URL (?room=XYZ)
     function handleUrlParams() {
         const params = new URLSearchParams(window.location.search);
         const roomParam = params.get('room');
-
         if (roomParam) {
             roomIdInput.value = roomParam.trim();
         }
     }
-
     handleUrlParams();
 
-    // --- RENDERIZAÇÃO E EVENTOS DO MODAL DE PARTICIPANTES ---
+    // --- MODAL DE PARTICIPANTES ---
     function renderizarListaParticipantes() {
         if (!usersListContainer) return;
         usersListContainer.innerHTML = '';
@@ -911,7 +1036,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             card.appendChild(infoDiv);
 
-            // Qualquer participante pode remover outro participante da reunião
             if (!isSelf) {
                 const kickBtn = document.createElement('button');
                 kickBtn.className = 'btn-kick';
@@ -938,13 +1062,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (openUsersModalBtn) {
         openUsersModalBtn.addEventListener('click', () => {
             renderizarListaParticipantes();
-            usersModal.style.display = 'flex';
+            if (usersModal) usersModal.style.display = 'flex';
         });
     }
 
     if (closeUsersModalBtn) {
         closeUsersModalBtn.addEventListener('click', () => {
-            usersModal.style.display = 'none';
+            if (usersModal) usersModal.style.display = 'none';
         });
     }
 

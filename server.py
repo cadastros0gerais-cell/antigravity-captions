@@ -2,6 +2,8 @@ import os
 import json
 import pathlib
 import datetime
+import re
+import uuid
 from typing import Dict, List, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,10 +15,15 @@ STATIC_DIR = BASE_DIR / "static"
 LOGS_DIR = BASE_DIR / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 
+def sanitize_room_id(room_id: str) -> str:
+    """Sanitiza o nome da sala para evitar problemas no sistema de arquivos"""
+    clean = re.sub(r'[^a-zA-Z0-9_-]', '_', room_id or "main")
+    return clean if clean else "main"
+
 app = FastAPI(
     title="Antigravity Live Captions & Transcriptions",
     description="Sistema web de transcrição de voz em tempo real (Transmissor e Receptor)",
-    version="2.0.0"
+    version="2.1.0"
 )
 
 app.add_middleware(
@@ -30,9 +37,6 @@ app.add_middleware(
 # Servir pasta static se ela existir
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-# Connection Manager com suporte a múltiplas Salas (Rooms)
-import uuid
 
 # Connection Manager com suporte a presença em tempo real e remoção livre de participantes
 class RoomConnectionManager:
@@ -125,7 +129,6 @@ class RoomConnectionManager:
         await self.broadcast(msg, room_id)
 
     async def kick_user(self, room_id: str, target_client_id: str, kicker_client_id: str):
-        # Qualquer participante válido da sala pode solicitar a remoção de outro participante
         if room_id not in self.clients or kicker_client_id not in self.clients[room_id]:
             return
 
@@ -212,10 +215,6 @@ async def get_dicionario_api():
 
 @app.post("/api/dicionario")
 async def update_dicionario(body: dict = Body(...)):
-    """
-    Adiciona ou atualiza um termo no dicionário de substituição fonética.
-    Formato esperado: {"palavra": "quei frame", "substitucao": "keyframe"}
-    """
     dict_path = BASE_DIR / "dicionario.json"
     palavra = body.get("palavra", "").strip().lower()
     substitucao = body.get("substitucao", "").strip()
@@ -238,19 +237,42 @@ async def update_dicionario(body: dict = Body(...)):
 
     return {"status": "sucesso", "mensagem": f"Termo '{palavra}' -> '{substitucao}' adicionado/atualizado.", "dicionario": current_dict}
 
+@app.delete("/api/dicionario/{palavra}")
+async def delete_dicionario_term(palavra: str):
+    """Remove um termo do dicionário de substituição fonética"""
+    dict_path = BASE_DIR / "dicionario.json"
+    target = palavra.strip().lower()
+    if not dict_path.exists():
+        raise HTTPException(status_code=404, detail="Dicionário não encontrado.")
+
+    with open(dict_path, "r", encoding="utf-8") as f:
+        try:
+            current_dict = json.load(f)
+        except Exception:
+            current_dict = {}
+
+    if target in current_dict:
+        del current_dict[target]
+        with open(dict_path, "w", encoding="utf-8") as f:
+            json.dump(current_dict, f, ensure_ascii=False, indent=4)
+        return {"status": "sucesso", "mensagem": f"Termo '{target}' removido.", "dicionario": current_dict}
+
+    raise HTTPException(status_code=404, detail=f"Termo '{target}' não encontrado no dicionário.")
+
 @app.get("/api/history/{room_id}")
 async def get_room_history(room_id: str):
     """Retorna o histórico recente em memória para leitores recém-conectados"""
     return manager.history.get(room_id, [])
 
 @app.get("/api/export/{room_id}")
-async def export_room_log(room_id: str, format: str = Query("txt", regex="^(txt|json)$")):
+async def export_room_log(room_id: str, format: str = Query("txt", pattern="^(txt|json)$")):
     """Baixa o log da reunião gravado no disco"""
-    log_file = LOGS_DIR / f"{room_id}_log.txt"
+    clean_room = sanitize_room_id(room_id)
+    log_file = LOGS_DIR / f"{clean_room}_log.txt"
     if not log_file.exists():
         if format == "json":
-            return JSONResponse(content=[], headers={"Content-Disposition": f"attachment; filename={room_id}_log.json"})
-        return Response(content="Nenhum log gravado para esta sala ainda.", media_type="text/plain", headers={"Content-Disposition": f"attachment; filename={room_id}_log.txt"})
+            return JSONResponse(content=[], headers={"Content-Disposition": f"attachment; filename={clean_room}_log.json"})
+        return Response(content="Nenhum log gravado para esta sala ainda.", media_type="text/plain", headers={"Content-Disposition": f"attachment; filename={clean_room}_log.txt"})
 
     content = log_file.read_text(encoding="utf-8")
     
@@ -260,14 +282,15 @@ async def export_room_log(room_id: str, format: str = Query("txt", regex="^(txt|
         for line in lines:
             if line:
                 parsed.append({"line": line})
-        return JSONResponse(content=parsed, headers={"Content-Disposition": f"attachment; filename={room_id}_log.json"})
+        return JSONResponse(content=parsed, headers={"Content-Disposition": f"attachment; filename={clean_room}_log.json"})
 
-    return Response(content=content, media_type="text/plain; charset=utf-8", headers={"Content-Disposition": f"attachment; filename={room_id}_log.txt"})
+    return Response(content=content, media_type="text/plain; charset=utf-8", headers={"Content-Disposition": f"attachment; filename={clean_room}_log.txt"})
 
 @app.delete("/api/logs/{room_id}")
 async def clear_room_log(room_id: str):
     """Limpa o log da sala"""
-    log_file = LOGS_DIR / f"{room_id}_log.txt"
+    clean_room = sanitize_room_id(room_id)
+    log_file = LOGS_DIR / f"{clean_room}_log.txt"
     if log_file.exists():
         log_file.unlink()
     if room_id in manager.history:
@@ -288,8 +311,8 @@ async def websocket_endpoint(websocket: WebSocket, room_id: Optional[str] = "mai
             except Exception:
                 continue
 
-            # Injetar room_id se não especificado
             data["room"] = room_id
+            data["senderId"] = client_id
             msg_type = data.get("type")
 
             if msg_type == "join":
@@ -304,10 +327,21 @@ async def websocket_endpoint(websocket: WebSocket, room_id: Optional[str] = "mai
                     await manager.kick_user(room_id, target_id, client_id)
                 continue
 
+            # Garantir que a mensagem use o nome registrado do participante se disponível
+            registered_user = manager.clients.get(room_id, {}).get(client_id)
+            if registered_user and registered_user.get("name"):
+                data["name"] = registered_user["name"]
+
+            # Se for fala (texto), gerar msgId único para evitar desduplicação incorreta no receptor
+            if "text" in data:
+                data["msgId"] = uuid.uuid4().hex[:12]
+
             # Se for uma frase finalizada, gravar no arquivo da sala
             if "name" in data and "text" in data and data.get("isFinal"):
                 now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 entry = {
+                    "msgId": data.get("msgId"),
+                    "senderId": client_id,
                     "timestamp": now_str,
                     "name": data["name"],
                     "text": data["text"],
@@ -315,8 +349,9 @@ async def websocket_endpoint(websocket: WebSocket, room_id: Optional[str] = "mai
                 }
                 manager.add_to_history(room_id, entry)
 
+                clean_room = sanitize_room_id(room_id)
                 log_line = f"[{now_str}] {data['name']}: {data['text']}\n"
-                log_file = LOGS_DIR / f"{room_id}_log.txt"
+                log_file = LOGS_DIR / f"{clean_room}_log.txt"
                 with open(log_file, "a", encoding="utf-8") as f:
                     f.write(log_line)
 
@@ -335,3 +370,4 @@ async def websocket_endpoint(websocket: WebSocket, room_id: Optional[str] = "mai
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
