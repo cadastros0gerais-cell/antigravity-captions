@@ -378,33 +378,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
         recognition = new SpeechRecognition();
-        // No Safari, continuous = true empilha resultados passados. continuous = false evita a acumulacao duplicada.
+        // continuous = true para Chrome/Edge/Brave; false para Safari que empilha histórico no buffer
         recognition.continuous = !isSafari;
         recognition.interimResults = true;
         recognition.lang = 'pt-BR';
 
-        let lastProcessedIndex = 0;
+        let sentFinalIndices = new Set();
+        let lastSentFinalText = '';
 
         recognition.onresult = (event) => {
             let interimTranscript = '';
-            let finalTranscript = '';
+            let newFinalTranscript = '';
 
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                const chunk = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    if (i >= lastProcessedIndex) {
-                        finalTranscript += chunk + ' ';
-                        lastProcessedIndex = i + 1;
+            for (let i = 0; i < event.results.length; ++i) {
+                const res = event.results[i];
+                const chunk = res[0].transcript.trim();
+
+                if (res.isFinal) {
+                    if (!sentFinalIndices.has(i)) {
+                        sentFinalIndices.add(i);
+                        if (chunk && chunk.toLowerCase() !== lastSentFinalText.toLowerCase()) {
+                            newFinalTranscript += (newFinalTranscript ? ' ' : '') + chunk;
+                            lastSentFinalText = chunk;
+                        }
                     }
                 } else {
-                    interimTranscript += chunk;
+                    if (i === event.results.length - 1) {
+                        interimTranscript = chunk;
+                    }
                 }
             }
 
             const userName = transmitterNameInput.value.trim() || "Anônimo";
 
-            if (finalTranscript.trim() !== '') {
-                const text = finalTranscript.trim();
+            if (newFinalTranscript.trim() !== '') {
+                const text = newFinalTranscript.trim();
                 liveTextPreview.innerText = `"${text}"`;
                 lastSentInterimText = '';
                 if (ws && ws.readyState === WebSocket.OPEN) {
@@ -422,11 +430,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let restartTimeout = null;
         recognition.onend = () => {
-            lastProcessedIndex = 0;
+            sentFinalIndices.clear();
             if (isRecording) {
                 if (lastSentInterimText && ws && ws.readyState === WebSocket.OPEN) {
                     const userName = transmitterNameInput.value.trim() || "Anônimo";
-                    ws.send(JSON.stringify({ name: userName, text: lastSentInterimText, isFinal: true }));
+                    if (lastSentInterimText.toLowerCase() !== lastSentFinalText.toLowerCase()) {
+                        ws.send(JSON.stringify({ name: userName, text: lastSentInterimText, isFinal: true }));
+                        lastSentFinalText = lastSentInterimText;
+                    }
                     lastSentInterimText = '';
                 }
 
@@ -724,10 +735,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isFinal) {
             if (msgId) processedMsgIds.add(msgId);
 
-            // Prevenir duplicatas idênticas consecutivas do mesmo participante (bug do Safari)
-            const lastText = recentFinalTextsBySender[senderKey] || '';
-            if (lastText && lastText.toLowerCase() === textoFormatado.trim().toLowerCase()) {
-                return;
+            // Trava anti-duplicação e extração de acúmulo do Safari
+            const lastText = (recentFinalTextsBySender[senderKey] || '').toLowerCase();
+            const currentText = textoFormatado.trim().toLowerCase();
+
+            if (lastText) {
+                // Se for idêntico ao texto anterior do mesmo emissor
+                if (currentText === lastText) return;
+
+                // Se o Safari transmitiu a frase inteira acomulada novamente com o início repetido
+                if (currentText.startsWith(lastText) && lastText.length > 4) {
+                    const onlyNewText = textoFormatado.trim().substring(recentFinalTextsBySender[senderKey].length).trim();
+                    if (!onlyNewText) return;
+                    textoFormatado = onlyNewText;
+                }
             }
             recentFinalTextsBySender[senderKey] = textoFormatado.trim();
 
