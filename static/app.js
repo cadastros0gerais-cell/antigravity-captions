@@ -13,6 +13,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusBadge = document.getElementById('statusBadge');
     const statusText = document.getElementById('statusText');
 
+    // Alternador de Tema (☀️ Claro / 🌙 Escuro com ~85% cinza leve no escuro)
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const themeToggleIcon = document.getElementById('themeToggleIcon');
+    const themeToggleText = document.getElementById('themeToggleText');
+
+    let currentTheme = localStorage.getItem('linca_theme') || 'dark';
+
+    function applyTheme(theme) {
+        currentTheme = theme;
+        localStorage.setItem('linca_theme', theme);
+
+        if (theme === 'dark') {
+            document.body.classList.add('theme-dark');
+            document.body.classList.remove('theme-light');
+            if (themeToggleIcon) themeToggleIcon.innerText = '☀️';
+            if (themeToggleText) themeToggleText.innerText = 'Modo Claro';
+        } else {
+            document.body.classList.add('theme-light');
+            document.body.classList.remove('theme-dark');
+            if (themeToggleIcon) themeToggleIcon.innerText = '🌙';
+            if (themeToggleText) themeToggleText.innerText = 'Modo Escuro';
+        }
+    }
+
+    applyTheme(currentTheme);
+
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            const nextTheme = (currentTheme === 'dark') ? 'light' : 'dark';
+            applyTheme(nextTheme);
+        });
+    }
+
     // Botões de Seleção de Papel
     const selectTransmissorBtn = document.getElementById('selectTransmissorBtn');
     const selectReceptorBtn = document.getElementById('selectReceptorBtn');

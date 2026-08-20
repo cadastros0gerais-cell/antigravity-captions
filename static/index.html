@@ -7,9 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=11">
+    <link rel="stylesheet" href="/static/style.css?v=12">
 </head>
-<body>
+<body class="theme-dark">
     <div class="app-background">
         <div class="bg-grid-overlay"></div>
     </div>
@@ -21,6 +21,11 @@
         </div>
 
         <div class="nav-info">
+            <button id="themeToggleBtn" class="btn-theme-toggle" title="Alternar Modo Claro / Escuro">
+                <span id="themeToggleIcon">☀️</span>
+                <span id="themeToggleText">Modo Claro</span>
+            </button>
+
             <button id="openUsersModalBtn" class="btn-nav-chip" style="display:none;" title="Ver lista de participantes">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 <span id="usersCountBadge">0</span>
@@ -287,6 +292,6 @@
     <!-- TOAST DE NOTIFICAÇÃO -->
     <div id="toastNotification" class="toast-notification" style="display: none;"></div>
 
-    <script src="/static/app.js?v=11"></script>
+    <script src="/static/app.js?v=12"></script>
 </body>
 </html>
