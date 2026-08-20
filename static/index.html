@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Antigravity Live Captions</title>
+    <title>LINCA - Transcrição de áudio em tempo real</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=10">
+    <link rel="stylesheet" href="/static/style.css?v=11">
 </head>
 <body>
     <div class="app-background">
@@ -17,10 +17,7 @@
     <!-- MAIN NAVBAR -->
     <header class="navbar">
         <div class="nav-brand">
-            <div class="logo-badge">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            </div>
-            <span class="logo-title">Antigravity Captions</span>
+            <span class="logo-title">LINCA</span>
         </div>
 
         <div class="nav-info">
@@ -42,17 +39,17 @@
     </header>
 
     <main class="main-content">
-        <!-- SCREEN 1: SELEÇÃO DE PAPEL (HERO SIMPLIFICADO) -->
+        <!-- SCREEN 1: SELEÇÃO DE PAPEL -->
         <section id="roleSelectionView" class="view active">
             <div class="hero-section">
-                <h1 class="hero-headline">Legendas ao Vivo</h1>
-                <p class="hero-description">Transcrição de áudio em tempo real.</p>
+                <h1 class="hero-headline">LINCA</h1>
+                <p class="hero-description">Transcrição de áudio em tempo real, português (BR)</p>
                 
                 <div class="room-card glass-panel">
-                    <label for="roomIdInput">Identificador da Sala</label>
+                    <label for="roomIdInput">IDENTIFICADOR DA SALA</label>
                     <div class="input-action-group">
                         <input type="text" id="roomIdInput" value="main" placeholder="Ex: reuniao-1" autocomplete="off" />
-                        <button id="generateRandomRoomBtn" class="btn btn-secondary" type="button" title="Gerar ID de sala aleatório">
+                        <button id="generateRandomRoomBtn" class="btn btn-sage" type="button" title="Gerar ID de sala aleatório">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.5" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1.5" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1.5" fill="currentColor"/></svg>
                             <span>Aleatória</span>
                         </button>
@@ -63,15 +60,16 @@
                     <!-- CARD TRANSMISSOR -->
                     <div class="role-card glass-panel" id="selectTransmissorBtn">
                         <div class="role-header">
-                            <div class="icon-circle icon-blue">
+                            <div class="icon-circle icon-sage">
                                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
                             </div>
-                            <span class="role-badge">Transmissão</span>
+                            <span class="role-badge">TRANSMISSÃO</span>
                         </div>
                         <h2>Transmissor</h2>
                         <p>Fale no seu microfone. Sua fala é transcrita e enviada em tempo real para a sala.</p>
 
-                        <button class="btn btn-gradient-blue w-full">
+                        <button class="btn btn-terracotta w-full">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
                             <span>Entrar como Transmissor</span>
                             <span class="arrow">→</span>
                         </button>
@@ -80,15 +78,16 @@
                     <!-- CARD RECEPTOR -->
                     <div class="role-card glass-panel" id="selectReceptorBtn">
                         <div class="role-header">
-                            <div class="icon-circle icon-indigo">
+                            <div class="icon-circle icon-sage">
                                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                             </div>
-                            <span class="role-badge">Visualização</span>
+                            <span class="role-badge">VISUALIZAÇÃO</span>
                         </div>
                         <h2>Receptor</h2>
                         <p>Assista às legendas na tela em tempo real com modo chat e teleprompter.</p>
 
-                        <button class="btn btn-gradient-indigo w-full">
+                        <button class="btn btn-peach w-full">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                             <span>Entrar como Receptor</span>
                             <span class="arrow">→</span>
                         </button>
@@ -159,9 +158,9 @@
             </div>
         </section>
 
-        <!-- SCREEN 3: PAINEL DO RECEPTOR (SEM BARRA INFERIOR/DESTAQUE LIMPO) -->
+        <!-- SCREEN 3: PAINEL DO RECEPTOR -->
         <section id="receiverView" class="view">
-            <div class="receiver-header-clean">
+            <div class="receiver-header-clean glass-panel">
                 <div class="header-clean-left">
                     <button class="btn-ghost" id="backFromReceptorBtn">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
@@ -197,7 +196,7 @@
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         <span>Log</span>
                     </button>
-                    <button id="clearCaptionsBtn" class="btn btn-sm btn-danger-outline btn-icon" title="Limpar mensagens">
+                    <button id="clearCaptionsBtn" class="btn btn-sm btn-terracotta btn-icon" title="Limpar mensagens">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>
                 </div>
@@ -235,7 +234,7 @@
                 <div class="dict-form-row">
                     <input type="text" id="dictPalavraInput" placeholder="Como o navegador ouve (ex: quei frame)" />
                     <input type="text" id="dictSubstInput" placeholder="Termo correto (ex: keyframe)" />
-                    <button id="addDictTermBtn" class="btn btn-primary">Adicionar</button>
+                    <button id="addDictTermBtn" class="btn btn-terracotta">Adicionar</button>
                 </div>
 
                 <div class="dict-terms-container">
@@ -259,7 +258,7 @@
             <div class="modal-body">
                 <div class="share-link-box">
                     <input type="text" id="shareLinkInput" readonly />
-                    <button id="copyShareLinkBtn" class="btn btn-primary" type="button">Copiar Link</button>
+                    <button id="copyShareLinkBtn" class="btn btn-terracotta" type="button">Copiar Link</button>
                 </div>
 
                 <div class="qr-code-wrapper">
@@ -288,6 +287,6 @@
     <!-- TOAST DE NOTIFICAÇÃO -->
     <div id="toastNotification" class="toast-notification" style="display: none;"></div>
 
-    <script src="/static/app.js?v=10"></script>
+    <script src="/static/app.js?v=11"></script>
 </body>
 </html>
