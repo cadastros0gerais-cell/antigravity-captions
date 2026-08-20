@@ -699,20 +699,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const color = getSpeakerColor(name);
         const textoFormatado = aplicarSubstituicoes(text);
 
-        // Modo Subtitle / Teleprompter
-        if (currentViewMode === 'subtitle') {
-            if (subtitleSpeaker) {
-                subtitleSpeaker.innerText = name;
-                subtitleSpeaker.style.color = color;
-            }
-            if (subtitleText) {
-                subtitleText.innerText = textoFormatado;
-                subtitleText.style.fontSize = `${subtitleFontSize}px`;
-            }
-            return;
+        // Atualizar overlay do Teleprompter
+        if (subtitleSpeaker) {
+            subtitleSpeaker.innerText = name;
+            subtitleSpeaker.style.color = color;
+        }
+        if (subtitleText) {
+            subtitleText.innerText = textoFormatado;
+            subtitleText.style.fontSize = `${subtitleFontSize}px`;
         }
 
-        // Modo Chat
+        // Modo Chat (Sempre processa e salva no histórico, mesmo se estiver no Teleprompter)
         if (isFinal) {
             if (msgId) processedMsgIds.add(msgId);
 
@@ -1039,6 +1036,33 @@ document.addEventListener('DOMContentLoaded', () => {
     handleUrlParams();
 
     // --- MODAL DE PARTICIPANTES ---
+    // --- HOVER BALÃO TRANSPARENTE E MODAL DE PARTICIPANTES ---
+    const usersHoverPopover = document.getElementById('usersHoverPopover');
+    const usersHoverList = document.getElementById('usersHoverList');
+
+    function renderizarHoverParticipantes() {
+        if (!usersHoverList) return;
+        usersHoverList.innerHTML = '';
+
+        if (!connectedUsersList || connectedUsersList.length === 0) {
+            usersHoverList.innerHTML = '<div class="popover-user-item">Nenhum participante</div>';
+            return;
+        }
+
+        connectedUsersList.forEach(user => {
+            const item = document.createElement('div');
+            item.className = 'popover-user-item';
+            const roleIcon = user.role === 'transmissor' ? '🎙️' : '📺';
+            const roleClass = user.role === 'transmissor' ? 'user-role-tag transmissor' : 'user-role-tag receptor';
+
+            item.innerHTML = `
+                <span>${roleIcon} ${escapeHtml(user.name)}</span>
+                <span class="${roleClass}">${user.role}</span>
+            `;
+            usersHoverList.appendChild(item);
+        });
+    }
+
     function renderizarListaParticipantes() {
         if (!usersListContainer) return;
         usersListContainer.innerHTML = '';
@@ -1093,7 +1117,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (openUsersModalBtn) {
+        openUsersModalBtn.addEventListener('mouseenter', () => {
+            renderizarHoverParticipantes();
+            if (usersHoverPopover) usersHoverPopover.style.display = 'block';
+        });
+
+        openUsersModalBtn.addEventListener('mouseleave', () => {
+            if (usersHoverPopover) usersHoverPopover.style.display = 'none';
+        });
+
         openUsersModalBtn.addEventListener('click', () => {
+            if (usersHoverPopover) usersHoverPopover.style.display = 'none';
             renderizarListaParticipantes();
             if (usersModal) usersModal.style.display = 'flex';
         });
