@@ -128,6 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeSpeechDivs = {}; // senderId -> bubble element
     let silenceTimers = {};   // senderId -> timer
     let lastInterimTexts = {};// senderId -> interim string
+    let recentFinalTextsBySender = {}; // senderId -> string (deduplicar mensagens idênticas consecutivas)
     let lastSentInterimText = '';
 
     // Teleprompter e Visualização
@@ -374,20 +375,29 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
         recognition = new SpeechRecognition();
-        recognition.continuous = true;
+        // No Safari, continuous = true empilha resultados passados. continuous = false evita a acumulacao duplicada.
+        recognition.continuous = !isSafari;
         recognition.interimResults = true;
         recognition.lang = 'pt-BR';
+
+        let lastProcessedIndex = 0;
 
         recognition.onresult = (event) => {
             let interimTranscript = '';
             let finalTranscript = '';
 
             for (let i = event.resultIndex; i < event.results.length; ++i) {
+                const chunk = event.results[i][0].transcript;
                 if (event.results[i].isFinal) {
-                    finalTranscript += event.results[i][0].transcript;
+                    if (i >= lastProcessedIndex) {
+                        finalTranscript += chunk + ' ';
+                        lastProcessedIndex = i + 1;
+                    }
                 } else {
-                    interimTranscript += event.results[i][0].transcript;
+                    interimTranscript += chunk;
                 }
             }
 
@@ -412,6 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let restartTimeout = null;
         recognition.onend = () => {
+            lastProcessedIndex = 0;
             if (isRecording) {
                 if (lastSentInterimText && ws && ws.readyState === WebSocket.OPEN) {
                     const userName = transmitterNameInput.value.trim() || "Anônimo";
@@ -424,7 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (isRecording) {
                         try { recognition.start(); } catch (e) {}
                     }
-                }, 250);
+                }, 200);
             }
         };
 
@@ -713,6 +724,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isFinal) {
             if (msgId) processedMsgIds.add(msgId);
 
+            // Prevenir duplicatas idênticas consecutivas do mesmo participante (bug do Safari)
+            const lastText = recentFinalTextsBySender[senderKey] || '';
+            if (lastText && lastText.toLowerCase() === textoFormatado.trim().toLowerCase()) {
+                return;
+            }
+            recentFinalTextsBySender[senderKey] = textoFormatado.trim();
+
             if (silenceTimers[senderKey]) {
                 clearTimeout(silenceTimers[senderKey]);
                 delete silenceTimers[senderKey];
@@ -826,9 +844,32 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(err => console.error("Erro ao carregar histórico:", err));
     }
 
-    // Exportar Logs da Reunião
+    // Exportar Logs da Reunião (Funciona tanto no Modo Chat quanto no Modo Teleprompter)
     exportLogBtn.addEventListener('click', () => {
-        window.open(`/api/export/${encodeURIComponent(currentRoom)}?format=txt`, '_blank');
+        const bubbles = captionsContainer.querySelectorAll('.chat-bubble');
+        let logLines = [];
+
+        bubbles.forEach(b => {
+            const speaker = b.querySelector('.chat-speaker span')?.innerText || '';
+            const time = b.querySelector('.chat-speaker time')?.innerText || '';
+            const text = b.querySelector('.chat-text')?.innerText || '';
+            if (text && speaker) {
+                logLines.push(`[${time}] ${speaker}: ${text}`);
+            }
+        });
+
+        if (logLines.length > 0) {
+            const blob = new Blob([logLines.join('\n')], { type: 'text/plain;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `linca_log_${currentRoom || 'main'}.txt`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast("📥 Log da reunião baixado!");
+        } else {
+            window.open(`/api/export/${encodeURIComponent(currentRoom || 'main')}?format=txt`, '_blank');
+        }
     });
 
     clearCaptionsBtn.addEventListener('click', () => {
